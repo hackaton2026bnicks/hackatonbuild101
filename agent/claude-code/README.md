@@ -20,7 +20,17 @@ Scrubbing happens before anything is sent. It removes known secret formats (bear
 
 File contents, edit strings, tool output and the transcript are never sent.
 
-## Setup
+## Setup inside this repo
+
+The hooks are already configured in [.claude/settings.json](../../.claude/settings.json). Only your key is personal:
+
+1. Get your API key (`b101_...`) from whoever runs the server.
+2. Set it as `BUILD101_KEY` (see step 3 below for the commands), then restart your terminal and editor.
+3. Open Claude Code in this repo. Your session shows up on the dashboard.
+
+Without `BUILD101_KEY` the hooks do nothing and send nothing. Use the ignored `scratch/` folder to try conflicts with a teammate without touching real files.
+
+## Setup in another project
 
 1. Clone this repo anywhere and note its path.
 
