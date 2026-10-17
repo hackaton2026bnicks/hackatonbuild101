@@ -1,0 +1,9 @@
+{
+  "mcpServers": {
+    "build101": {
+      "type": "stdio",
+      "command": "${BUILD101_PYTHON:-python}",
+      "args": ["agent/claude-code/mcp_server.py"]
+    }
+  }
+}
