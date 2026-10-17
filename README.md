@@ -35,11 +35,11 @@ Full stack with Docker (Postgres, Caddy and all services, built from source):
 docker compose -f infra/docker-compose.yml -f infra/docker-compose.dev.yml --env-file infra/.env.example up --build
 ```
 
-Then open http://localhost. The API is under `/api`, the mock bank under `/bank`. Create a key with the local admin token and send a fake agent session to see the dashboard move:
+Then open http://localhost. The API is under `/api`, the mock bank under `/bank`. Create a key inside the API container and send a fake agent session to see the dashboard move:
 
 ```bash
-curl -X POST http://localhost/api/admin/keys -H "Authorization: Bearer dev-admin-token" \
-  -H "Content-Type: application/json" -d '{"user": "ana"}'
+docker compose -f infra/docker-compose.yml -f infra/docker-compose.dev.yml --env-file infra/.env.example \
+  exec api python -m api.admin create-key ana
 python tools/simulate_agents.py --url http://localhost/api --key b101_...
 ```
 
@@ -55,7 +55,12 @@ Every endpoint except `/health` and the demo conversation endpoints needs `Autho
 | GET | `/api/sessions?active_minutes=60` | Your team's recent sessions: who, which agent, intent, last action, state |
 | GET | `/api/sessions/{id}/events` | Full events of one session, newest first |
 | GET | `/api/feed` | Server-sent events stream of everything your team ingests from now on |
-| POST/GET/DELETE | `/api/admin/keys` | Create, list and revoke keys (admin token only) |
+| POST | `/api/hooks/claude-code` | Target of Claude Code hooks: records the session's situation and answers with conflicts, discoveries or a subagent brief. See [agent/claude-code](agent/claude-code/README.md) |
+| POST | `/api/messages` | Share a discovery, alert or note with the sessions it is relevant to |
+| GET | `/api/messages` | Live messages with how many sessions received each one (injected and holdout) |
+| POST/GET/DELETE | `/api/admin/keys` | Key management. Blocked from the internet by Caddy; use `infra/keys.sh` |
+
+Every caller is rate limited: 1,200 requests per minute per key, 3,000 per IP, 120 per IP without a key. Requests to `/api` are capped at 2 MB.
 | POST | `/api/conversations` | Save a conversation message (public demo endpoint; no API key) |
 | GET | `/api/conversations?limit=50&offset=0` | List recent conversation messages (public demo endpoint; no API key) |
 | GET | `/api/conversations/{id}` | Read one conversation message (public demo endpoint; no API key) |
@@ -77,13 +82,15 @@ The `mensaje` field accepts up to 100,000 characters. The database assigns `id` 
 
 ### Keys for teammates
 
-On the deployed server, create one key per person (needs AWS CLI access to read the admin token):
+The admin API is not reachable from the internet. `infra/keys.sh` runs the command inside the server through SSM, so it needs AWS CLI access (Git Bash on Windows):
 
 ```bash
-./infra/create-key.sh ana
+./infra/keys.sh create ana        # prints the key once; share it privately
+./infra/keys.sh list
+./infra/keys.sh revoke 3
 ```
 
-The key is shown once. Revoke one with `DELETE /api/admin/keys/{id}`.
+From PowerShell: `& "C:\Program Files\Git\bin\bash.exe" ./infra/keys.sh create ana`.
 
 ## Deploy
 
