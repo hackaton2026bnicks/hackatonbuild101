@@ -169,6 +169,11 @@ if ! aws ssm get-parameter --name "/$PROJECT/POSTGRES_PASSWORD" >/dev/null 2>&1;
 else
   echo "exists  /$PROJECT/POSTGRES_PASSWORD"
 fi
+if ! aws ssm get-parameter --name "/$PROJECT/ADMIN_TOKEN" >/dev/null 2>&1; then
+  put_param ADMIN_TOKEN SecureString "$(openssl rand -hex 32)"
+else
+  echo "exists  /$PROJECT/ADMIN_TOKEN"
+fi
 if [ -n "${ANTHROPIC_API_KEY:-}" ]; then
   put_param ANTHROPIC_API_KEY SecureString "$ANTHROPIC_API_KEY"
 else
@@ -265,11 +270,15 @@ echo "SSM status: $PING"
 
 cat <<EOF
 
-Done. Add these as repository variables in GitHub
-(Settings > Secrets and variables > Actions > Variables tab > New repository variable):
+Done. Add these in GitHub (Settings > Secrets and variables > Actions).
+
+Secrets tab > New repository secret:
+
+  AWS_ROLE_ARN      $GH_ROLE_ARN
+
+Variables tab > New repository variable:
 
   AWS_REGION        $REGION
-  AWS_ROLE_ARN      $GH_ROLE_ARN
   EC2_INSTANCE_ID   $INSTANCE_ID
   APP_HOST          $APP_HOST
 

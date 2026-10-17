@@ -1,7 +1,6 @@
 # APP_HOST is a domain (HTTPS certificate issued automatically) or http://localhost for local runs.
 {$APP_HOST} {
-	encode gzip
-
+	# No compression on the API: it would buffer the server-sent events of /api/feed
 	handle_path /api/* {
 		reverse_proxy api:8000
 	}
@@ -11,6 +10,7 @@
 	}
 
 	handle {
+		encode gzip
 		root * /srv/ui
 		file_server
 	}

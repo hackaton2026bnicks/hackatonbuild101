@@ -33,6 +33,7 @@ services:
     restart: unless-stopped
     environment:
       DATABASE_URL: postgresql://build101:${POSTGRES_PASSWORD}@postgres:5432/build101
+      ADMIN_TOKEN: ${ADMIN_TOKEN:-}
       GIT_SHA: ${IMAGE_TAG:-dev}
     depends_on:
       postgres:
