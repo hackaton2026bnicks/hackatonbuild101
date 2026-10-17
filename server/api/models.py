@@ -4,7 +4,7 @@ import json
 from datetime import datetime
 from typing import Annotated, Any, Literal
 
-from pydantic import BaseModel, Field, field_validator
+from pydantic import BaseModel, Field, field_validator, model_validator
 
 MAX_PAYLOAD_BYTES = 64 * 1024
 MAX_BATCH = 500
@@ -82,18 +82,27 @@ class Conversation(BaseModel):
     timestamp: datetime
 
 
-MessageKind = Literal["discovery", "alert", "note"]
+MessageKind = Literal["discovery", "alert", "note", "question", "answer"]
 Topic = Annotated[str, Field(pattern=r"^(repo|host|file):\S{1,200}$")]
 
 # Minutes a message stays deliverable when the publisher does not say
-DEFAULT_TTL_MINUTES = {"discovery": 7 * 24 * 60, "alert": 60, "note": 24 * 60}
-PRIORITY = {"alert": 2, "discovery": 1, "note": 0}
+DEFAULT_TTL_MINUTES = {
+    "discovery": 7 * 24 * 60,
+    "alert": 60,
+    "note": 24 * 60,
+    "question": 4 * 60,
+    "answer": 24 * 60,
+}
+# Answers go to one waiting session, so they jump the queue
+PRIORITY = {"answer": 3, "alert": 2, "question": 1, "discovery": 1, "note": 0}
 
 
 class MessageCreate(BaseModel):
     """Something one session or person shares with the sessions it is relevant to.
 
     Empty topics reach the whole team; otherwise only sessions whose situation shares a topic.
+    An answer needs reply_to and reaches only the session that asked.
+    Agents do not know their session id, so they send repo and the server finds their live session.
     """
 
     kind: MessageKind = "discovery"
@@ -101,3 +110,11 @@ class MessageCreate(BaseModel):
     topics: list[Topic] = Field(default_factory=list, max_length=10)
     ttl_minutes: int | None = Field(default=None, ge=1, le=7 * 24 * 60)
     session_id: str | None = Field(default=None, max_length=128)
+    repo: str | None = Field(default=None, max_length=200)
+    reply_to: int | None = None
+
+    @model_validator(mode="after")
+    def answers_reply_to_a_question(self) -> "MessageCreate":
+        if (self.kind == "answer") != (self.reply_to is not None):
+            raise ValueError("reply_to is required for answers and only allowed on them")
+        return self

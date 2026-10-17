@@ -261,35 +261,46 @@ class Database:
         from_session: str | None,
         priority: int,
         ttl_minutes: int,
+        reply_to: int | None = None,
+        to_session: str | None = None,
     ) -> dict:
         async with self.pool.connection() as conn:
             cur = await conn.execute(
                 """
-                INSERT INTO messages (team, kind, topics, body, from_user, from_session, priority, expires_at)
-                VALUES (%s, %s, %s, %s, %s, %s, %s, now() + make_interval(mins => %s))
-                RETURNING id, kind, topics, body, from_user, from_session, priority, created_at, expires_at
+                INSERT INTO messages (team, kind, topics, body, from_user, from_session, priority, expires_at,
+                                      reply_to, to_session)
+                VALUES (%s, %s, %s, %s, %s, %s, %s, now() + make_interval(mins => %s), %s, %s)
+                RETURNING id, kind, topics, body, from_user, from_session, priority, created_at, expires_at,
+                          reply_to, to_session
                 """,
-                (team, kind, topics, body, from_user, from_session, priority, ttl_minutes),
+                (
+                    team, kind, topics, body, from_user, from_session,
+                    priority, ttl_minutes, reply_to, to_session,
+                ),
             )
             return await cur.fetchone()
 
     async def pending_messages(self, team: str, session_id: str, topics: list[str], limit: int) -> list[dict]:
-        """Live messages relevant to this session that it has not received yet."""
+        """Live messages relevant to this session that it has not received yet.
+
+        Addressed messages (answers) reach only their session; the rest are routed by topic.
+        """
         async with self.pool.connection() as conn:
             cur = await conn.execute(
                 """
-                SELECT m.id, m.kind, m.body, m.from_user, m.created_at
+                SELECT m.id, m.kind, m.body, m.from_user, m.created_at, m.reply_to
                 FROM messages m
                 WHERE m.team = %s
-                  AND m.kind IN ('discovery', 'alert', 'note')
+                  AND m.kind IN ('discovery', 'alert', 'note', 'question', 'answer')
                   AND m.expires_at > now()
                   AND m.from_session IS DISTINCT FROM %s
-                  AND (cardinality(m.topics) = 0 OR m.topics && %s::text[])
+                  AND (m.to_session = %s
+                       OR (m.to_session IS NULL AND (cardinality(m.topics) = 0 OR m.topics && %s::text[])))
                   AND NOT EXISTS (SELECT 1 FROM deliveries d WHERE d.message_id = m.id AND d.session_id = %s)
                 ORDER BY m.priority DESC, m.created_at DESC
                 LIMIT %s
                 """,
-                (team, session_id, topics, session_id, limit),
+                (team, session_id, session_id, topics, session_id, limit),
             )
             return await cur.fetchall()
 
@@ -335,7 +346,7 @@ class Database:
                 """
                 SELECT m.body, m.from_user FROM deliveries d JOIN messages m ON m.id = d.message_id
                 WHERE d.team = %s AND d.session_id = %s AND d.outcome = 'injected'
-                  AND m.kind IN ('discovery', 'alert', 'note') AND m.expires_at > now()
+                  AND m.kind IN ('discovery', 'alert', 'note', 'answer') AND m.expires_at > now()
                 ORDER BY d.delivered_at DESC LIMIT 5
                 """,
                 (team, session_id),
@@ -343,12 +354,82 @@ class Database:
             received = await cur.fetchall()
         return {"intent": session.get("intent"), "edited": edited, "failures": failures, "received": received}
 
+    async def live_session(self, team: str, user: str, repo: str) -> str | None:
+        """The user's most recently active live session in a repo: who an MCP call comes from.
+
+        The tool call's own PreToolUse hook lands just before the call, so that session is the newest.
+        """
+        async with self.pool.connection() as conn:
+            cur = await conn.execute(
+                """
+                SELECT s.session_id FROM sessions s
+                JOIN session_resources r ON r.team = s.team AND r.session_id = s.session_id
+                WHERE s.team = %s AND s.user_name = %s AND r.kind = 'repo' AND r.value = %s
+                  AND s.ended_at IS NULL AND s.last_event_at > now() - interval '1 hour'
+                ORDER BY s.last_event_at DESC
+                LIMIT 1
+                """,
+                (team, user, repo),
+            )
+            row = await cur.fetchone()
+            return row["session_id"] if row else None
+
+    async def get_message(self, team: str, message_id: int) -> dict | None:
+        async with self.pool.connection() as conn:
+            cur = await conn.execute(
+                """
+                SELECT id, kind, topics, body, from_user, from_session, created_at, expires_at
+                FROM messages WHERE team = %s AND id = %s
+                """,
+                (team, message_id),
+            )
+            return await cur.fetchone()
+
+    async def team_activity(self, team: str, repo: str, minutes: int) -> list[dict]:
+        """Live sessions in a repo with what they are doing and the files they edited lately."""
+        async with self.pool.connection() as conn:
+            cur = await conn.execute(
+                """
+                SELECT s.session_id, s.user_name, s.intent, s.last_summary, s.last_event_at,
+                       COALESCE(array_agg(e.value ORDER BY e.last_seen DESC)
+                                FILTER (WHERE e.value IS NOT NULL), '{}') AS editing
+                FROM sessions s
+                JOIN session_resources r ON r.team = s.team AND r.session_id = s.session_id
+                     AND r.kind = 'repo' AND r.value = %s
+                LEFT JOIN session_resources e ON e.team = s.team AND e.session_id = s.session_id
+                     AND e.kind = 'edit' AND e.last_seen > now() - make_interval(mins => %s)
+                WHERE s.team = %s AND s.ended_at IS NULL
+                  AND s.last_event_at > now() - make_interval(mins => %s)
+                GROUP BY s.session_id, s.user_name, s.intent, s.last_summary, s.last_event_at
+                ORDER BY s.last_event_at DESC
+                """,
+                (repo, minutes, team, minutes),
+            )
+            return await cur.fetchall()
+
+    async def open_questions(self, team: str, topics: list[str], limit: int) -> list[dict]:
+        """Unexpired questions on these topics (or the whole team) that nobody answered yet."""
+        async with self.pool.connection() as conn:
+            cur = await conn.execute(
+                """
+                SELECT q.id, q.body, q.from_user, q.from_session, q.created_at
+                FROM messages q
+                WHERE q.team = %s AND q.kind = 'question' AND q.expires_at > now()
+                  AND (cardinality(q.topics) = 0 OR q.topics && %s::text[])
+                  AND NOT EXISTS (SELECT 1 FROM messages a WHERE a.reply_to = q.id)
+                ORDER BY q.created_at DESC
+                LIMIT %s
+                """,
+                (team, topics, limit),
+            )
+            return await cur.fetchall()
+
     async def list_messages(self, team: str, include_expired: bool, limit: int) -> list[dict]:
         async with self.pool.connection() as conn:
             cur = await conn.execute(
                 """
                 SELECT m.id, m.kind, m.topics, m.body, m.from_user, m.from_session,
-                       m.created_at, m.expires_at,
+                       m.created_at, m.expires_at, m.reply_to,
                        count(d.message_id) FILTER (WHERE d.outcome = 'injected') AS injected,
                        count(d.message_id) FILTER (WHERE d.outcome = 'holdout') AS holdout
                 FROM messages m

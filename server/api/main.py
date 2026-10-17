@@ -114,18 +114,53 @@ async def claude_code_hook(
 
 @app.post("/messages", status_code=201)
 async def publish_message(body: MessageCreate, caller: Caller, request: Request) -> dict:
-    message = await request.app.state.db.create_message(
+    db: Database = request.app.state.db
+    session_id = body.session_id
+    if not session_id and body.repo:
+        session_id = await db.live_session(caller.team, caller.user, body.repo)
+
+    topics, to_session = body.topics, None
+    if body.kind == "answer":
+        question = await db.get_message(caller.team, body.reply_to)
+        if not question or question["kind"] != "question":
+            raise HTTPException(404, "No question with that id.")
+        # The answer goes to whoever asked, wherever their session is now
+        topics, to_session = question["topics"], question["from_session"]
+    elif not topics and body.repo and body.kind in ("discovery", "question"):
+        # Agents publishing without topics mean their repo, not every team in the org
+        topics = [f"repo:{body.repo}"]
+
+    message = await db.create_message(
         caller.team,
         body.kind,
         scrub(body.body),
-        body.topics,
+        topics,
         from_user=caller.user,
-        from_session=body.session_id,
+        from_session=session_id,
         priority=PRIORITY[body.kind],
         ttl_minutes=body.ttl_minutes or DEFAULT_TTL_MINUTES[body.kind],
+        reply_to=body.reply_to,
+        to_session=to_session,
     )
     request.app.state.broker.publish(caller.team, collab.feed_item(message, caller.user))
     return message
+
+
+@app.get("/team")
+async def team(
+    caller: Caller,
+    request: Request,
+    repo: Annotated[str, Query(min_length=1, max_length=200)],
+    active_minutes: Annotated[int, Query(ge=1, le=24 * 60)] = collab.PRESENCE_MINUTES,
+) -> dict:
+    """Who is working in a repo right now, on what, and which questions are waiting for an answer."""
+    db: Database = request.app.state.db
+    me = await db.live_session(caller.team, caller.user, repo)
+    sessions = await db.team_activity(caller.team, repo, active_minutes)
+    for row in sessions:
+        row["you"] = row["session_id"] == me
+    questions = await db.open_questions(caller.team, [f"repo:{repo}"], 10)
+    return {"repo": repo, "sessions": sessions, "open_questions": questions}
 
 
 @app.get("/messages")

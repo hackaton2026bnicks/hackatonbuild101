@@ -5,8 +5,23 @@ Claude Code calls the team server on every hook. The server records what your se
 - **Conflict warning.** Before you edit a file that another live session edited in the last 15 minutes, the edit is stopped once with who, when and what they were doing. Retry and it goes through.
 - **Team discoveries.** Notes published for a host, file or repo you are touching reach your agent at its next hook, once.
 - **Subagent brief.** When your session starts a subagent, the subagent gets the parent's task, edited files, recent failures and team notes.
+- **Who else is here.** When a session starts, it learns which teammates are working in the same repo, on what task and which files.
+- **Questions and answers.** Questions from teammates' agents reach you at your next hook; an answer reaches only the session that asked.
 
 If the server is down or slow, the hook gives up after 4 seconds and the agent keeps working.
+
+## Team tools for the agent
+
+[mcp_server.py](mcp_server.py) is a local MCP server, registered in [.mcp.json](../../.mcp.json), so the agent can talk to the team on its own:
+
+| Tool | What it does |
+| --- | --- |
+| `share_discovery` | Publishes something it learned to sessions on the same repo, files or hosts (`alert` for urgent, 1 hour). |
+| `ask_team` | Asks a question; the agent keeps working and the answer arrives in a later turn. |
+| `answer_team` | Answers a question it received as `[build101 · question #N]`. |
+| `team_status` | Lists live sessions in the repo, their task and edited files, and unanswered questions. |
+
+Restart Claude Code in this repo and approve the `build101` server when asked. It uses the same `BUILD101_KEY`, scrubs what the agent writes with the forwarder's rules, and sends no file contents. Where `python` is not on PATH (macOS), also set `BUILD101_PYTHON=python3`.
 
 ## What leaves your machine
 

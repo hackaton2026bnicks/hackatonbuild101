@@ -86,6 +86,10 @@ CREATE TABLE IF NOT EXISTS messages (
 CREATE INDEX IF NOT EXISTS messages_team_expires ON messages (team, expires_at DESC);
 CREATE INDEX IF NOT EXISTS messages_topics ON messages USING gin (topics);
 
+-- Answers point at their question and go only to the session that asked it
+ALTER TABLE messages ADD COLUMN IF NOT EXISTS reply_to bigint REFERENCES messages (id) ON DELETE CASCADE;
+ALTER TABLE messages ADD COLUMN IF NOT EXISTS to_session text;
+
 -- One row per message and receiving session: what was injected, held out or skipped. Source of the metrics.
 CREATE TABLE IF NOT EXISTS deliveries (
     message_id    bigint NOT NULL REFERENCES messages (id) ON DELETE CASCADE,
