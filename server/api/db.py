@@ -185,3 +185,179 @@ class Database:
                 (limit, offset),
             )
             return await cur.fetchall()
+
+    async def touch_resources(
+        self,
+        team: str,
+        user: str,
+        session_id: str,
+        repo: str,
+        agent_id: str | None,
+        items: list[tuple[str, str]],
+    ) -> None:
+        """Record what the session is touching now. Items are (kind, value) pairs."""
+        async with self.pool.connection() as conn:
+            for kind, value in items:
+                await conn.execute(
+                    """
+                    INSERT INTO session_resources (team, session_id, kind, value, user_name, repo, agent_id)
+                    VALUES (%s, %s, %s, %s, %s, %s, %s)
+                    ON CONFLICT (team, session_id, kind, value) DO UPDATE SET last_seen = now()
+                    """,
+                    (team, session_id, kind, value, user, repo, agent_id),
+                )
+
+    async def session_topics(self, team: str, session_id: str) -> list[str]:
+        async with self.pool.connection() as conn:
+            cur = await conn.execute(
+                """
+                SELECT kind || ':' || value AS topic FROM session_resources
+                WHERE team = %s AND session_id = %s AND kind IN ('repo', 'host', 'file')
+                """,
+                (team, session_id),
+            )
+            return [row["topic"] for row in await cur.fetchall()]
+
+    async def recent_editor(
+        self, team: str, repo: str, file: str, session_id: str, minutes: int
+    ) -> dict | None:
+        """Another live session that edited this file recently, if any."""
+        async with self.pool.connection() as conn:
+            cur = await conn.execute(
+                """
+                SELECT r.session_id, r.user_name, r.last_seen, s.intent, s.agent
+                FROM session_resources r
+                JOIN sessions s ON s.team = r.team AND s.session_id = r.session_id
+                WHERE r.team = %s AND r.repo = %s AND r.kind = 'edit' AND r.value = %s
+                  AND r.session_id <> %s
+                  AND r.last_seen > now() - make_interval(mins => %s)
+                  AND s.ended_at IS NULL
+                ORDER BY r.last_seen DESC
+                LIMIT 1
+                """,
+                (team, repo, file, session_id, minutes),
+            )
+            return await cur.fetchone()
+
+    async def conflict_warned(self, team: str, session_id: str, file: str) -> bool:
+        async with self.pool.connection() as conn:
+            cur = await conn.execute(
+                """
+                SELECT 1 FROM deliveries d JOIN messages m ON m.id = d.message_id
+                WHERE d.team = %s AND d.session_id = %s AND m.kind = 'conflict' AND %s = ANY (m.topics)
+                LIMIT 1
+                """,
+                (team, session_id, f"file:{file}"),
+            )
+            return await cur.fetchone() is not None
+
+    async def create_message(
+        self,
+        team: str,
+        kind: str,
+        body: str,
+        topics: list[str],
+        from_user: str,
+        from_session: str | None,
+        priority: int,
+        ttl_minutes: int,
+    ) -> dict:
+        async with self.pool.connection() as conn:
+            cur = await conn.execute(
+                """
+                INSERT INTO messages (team, kind, topics, body, from_user, from_session, priority, expires_at)
+                VALUES (%s, %s, %s, %s, %s, %s, %s, now() + make_interval(mins => %s))
+                RETURNING id, kind, topics, body, from_user, from_session, priority, created_at, expires_at
+                """,
+                (team, kind, topics, body, from_user, from_session, priority, ttl_minutes),
+            )
+            return await cur.fetchone()
+
+    async def pending_messages(self, team: str, session_id: str, topics: list[str], limit: int) -> list[dict]:
+        """Live messages relevant to this session that it has not received yet."""
+        async with self.pool.connection() as conn:
+            cur = await conn.execute(
+                """
+                SELECT m.id, m.kind, m.body, m.from_user, m.created_at
+                FROM messages m
+                WHERE m.team = %s
+                  AND m.kind IN ('discovery', 'alert', 'note')
+                  AND m.expires_at > now()
+                  AND m.from_session IS DISTINCT FROM %s
+                  AND (cardinality(m.topics) = 0 OR m.topics && %s::text[])
+                  AND NOT EXISTS (SELECT 1 FROM deliveries d WHERE d.message_id = m.id AND d.session_id = %s)
+                ORDER BY m.priority DESC, m.created_at DESC
+                LIMIT %s
+                """,
+                (team, session_id, topics, session_id, limit),
+            )
+            return await cur.fetchall()
+
+    async def record_delivery(
+        self, message_id: int, team: str, session_id: str, hook: str, outcome: str
+    ) -> None:
+        async with self.pool.connection() as conn:
+            await conn.execute(
+                """
+                INSERT INTO deliveries (message_id, team, session_id, hook, outcome)
+                VALUES (%s, %s, %s, %s, %s)
+                ON CONFLICT (message_id, session_id) DO NOTHING
+                """,
+                (message_id, team, session_id, hook, outcome),
+            )
+
+    async def session_brief(self, team: str, session_id: str) -> dict:
+        """What a subagent should know about its parent session."""
+        async with self.pool.connection() as conn:
+            cur = await conn.execute(
+                "SELECT intent FROM sessions WHERE team = %s AND session_id = %s", (team, session_id)
+            )
+            session = await cur.fetchone() or {}
+            cur = await conn.execute(
+                """
+                SELECT value FROM session_resources
+                WHERE team = %s AND session_id = %s AND kind = 'edit'
+                ORDER BY last_seen DESC LIMIT 8
+                """,
+                (team, session_id),
+            )
+            edited = [row["value"] for row in await cur.fetchall()]
+            cur = await conn.execute(
+                """
+                SELECT summary FROM events
+                WHERE team = %s AND session_id = %s AND payload ? 'error'
+                ORDER BY id DESC LIMIT 3
+                """,
+                (team, session_id),
+            )
+            failures = [row["summary"] for row in await cur.fetchall()]
+            cur = await conn.execute(
+                """
+                SELECT m.body, m.from_user FROM deliveries d JOIN messages m ON m.id = d.message_id
+                WHERE d.team = %s AND d.session_id = %s AND d.outcome = 'injected'
+                  AND m.kind IN ('discovery', 'alert', 'note') AND m.expires_at > now()
+                ORDER BY d.delivered_at DESC LIMIT 5
+                """,
+                (team, session_id),
+            )
+            received = await cur.fetchall()
+        return {"intent": session.get("intent"), "edited": edited, "failures": failures, "received": received}
+
+    async def list_messages(self, team: str, include_expired: bool, limit: int) -> list[dict]:
+        async with self.pool.connection() as conn:
+            cur = await conn.execute(
+                """
+                SELECT m.id, m.kind, m.topics, m.body, m.from_user, m.from_session,
+                       m.created_at, m.expires_at,
+                       count(d.message_id) FILTER (WHERE d.outcome = 'injected') AS injected,
+                       count(d.message_id) FILTER (WHERE d.outcome = 'holdout') AS holdout
+                FROM messages m
+                LEFT JOIN deliveries d ON d.message_id = m.id
+                WHERE m.team = %s AND (%s OR m.expires_at > now())
+                GROUP BY m.id
+                ORDER BY m.created_at DESC
+                LIMIT %s
+                """,
+                (team, include_expired, limit),
+            )
+            return await cur.fetchall()

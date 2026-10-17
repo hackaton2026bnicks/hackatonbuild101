@@ -2,7 +2,7 @@
 
 import json
 from datetime import datetime
-from typing import Any, Literal
+from typing import Annotated, Any, Literal
 
 from pydantic import BaseModel, Field, field_validator
 
@@ -20,6 +20,9 @@ EventType = Literal[
     "compact",
     "session_end",
     "user_correction",
+    "subagent_start",
+    "subagent_stop",
+    "stop",
 ]
 
 NAME_PATTERN = r"^[A-Za-z0-9_.-]{1,64}$"
@@ -77,3 +80,24 @@ class Conversation(BaseModel):
     usuario: str
     mensaje: str
     timestamp: datetime
+
+
+MessageKind = Literal["discovery", "alert", "note"]
+Topic = Annotated[str, Field(pattern=r"^(repo|host|file):\S{1,200}$")]
+
+# Minutes a message stays deliverable when the publisher does not say
+DEFAULT_TTL_MINUTES = {"discovery": 7 * 24 * 60, "alert": 60, "note": 24 * 60}
+PRIORITY = {"alert": 2, "discovery": 1, "note": 0}
+
+
+class MessageCreate(BaseModel):
+    """Something one session or person shares with the sessions it is relevant to.
+
+    Empty topics reach the whole team; otherwise only sessions whose situation shares a topic.
+    """
+
+    kind: MessageKind = "discovery"
+    body: str = Field(min_length=1, max_length=1000)
+    topics: list[Topic] = Field(default_factory=list, max_length=10)
+    ttl_minutes: int | None = Field(default=None, ge=1, le=7 * 24 * 60)
+    session_id: str | None = Field(default=None, max_length=128)
