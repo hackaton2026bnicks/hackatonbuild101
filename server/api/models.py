@@ -1,12 +1,14 @@
 """Request and response models. Event follows the normalized schema in docs/SPEC.md section 3."""
 
 import json
+from datetime import datetime
 from typing import Any, Literal
 
 from pydantic import BaseModel, Field, field_validator
 
 MAX_PAYLOAD_BYTES = 64 * 1024
 MAX_BATCH = 500
+MAX_MESSAGE_CHARS = 100_000
 SUMMARY_CHARS = 200
 
 EventType = Literal[
@@ -63,3 +65,15 @@ class EventBatch(BaseModel):
 class KeyRequest(BaseModel):
     user: str = Field(pattern=NAME_PATTERN)
     team: str = Field(default="default", pattern=NAME_PATTERN)
+
+
+class ConversationCreate(BaseModel):
+    usuario: str = Field(min_length=1, max_length=128)
+    mensaje: str = Field(min_length=1, max_length=MAX_MESSAGE_CHARS)
+
+
+class Conversation(BaseModel):
+    id: int
+    usuario: str
+    mensaje: str
+    timestamp: datetime

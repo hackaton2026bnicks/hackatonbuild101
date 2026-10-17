@@ -43,3 +43,12 @@ CREATE TABLE IF NOT EXISTS events (
 
 CREATE INDEX IF NOT EXISTS events_team_session ON events (team, session_id, id);
 CREATE INDEX IF NOT EXISTS events_team_received ON events (team, received_at DESC);
+
+CREATE TABLE IF NOT EXISTS conversacion (
+    id          bigserial PRIMARY KEY,
+    usuario     text NOT NULL,
+    mensaje     text NOT NULL,
+    "timestamp" timestamptz NOT NULL DEFAULT now()
+);
+
+CREATE INDEX IF NOT EXISTS conversacion_timestamp ON conversacion ("timestamp" DESC, id DESC);
