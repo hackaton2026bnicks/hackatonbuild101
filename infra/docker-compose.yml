@@ -1,0 +1,80 @@
+# Production stack. Runs on the EC2 instance; images come from ECR.
+# Variables come from .env, which remote-deploy.sh writes on the server.
+
+name: build101
+
+x-logging: &logging
+  driver: json-file
+  options:
+    max-size: "10m"
+    max-file: "3"
+
+services:
+  caddy:
+    image: caddy:2.8-alpine
+    restart: unless-stopped
+    ports:
+      - "80:80"
+      - "443:443"
+    environment:
+      APP_HOST: ${APP_HOST}
+    volumes:
+      - ./Caddyfile:/etc/caddy/Caddyfile:ro
+      - ../ui:/srv/ui:ro
+      - caddy_data:/data
+      - caddy_config:/config
+    depends_on:
+      - api
+      - mockbank
+    logging: *logging
+
+  api:
+    image: ${REGISTRY:-local}/build101-api:${IMAGE_TAG:-dev}
+    restart: unless-stopped
+    environment:
+      DATABASE_URL: postgresql://build101:${POSTGRES_PASSWORD}@postgres:5432/build101
+      GIT_SHA: ${IMAGE_TAG:-dev}
+    depends_on:
+      postgres:
+        condition: service_healthy
+    logging: *logging
+
+  worker:
+    image: ${REGISTRY:-local}/build101-worker:${IMAGE_TAG:-dev}
+    restart: unless-stopped
+    environment:
+      DATABASE_URL: postgresql://build101:${POSTGRES_PASSWORD}@postgres:5432/build101
+      ANTHROPIC_API_KEY: ${ANTHROPIC_API_KEY:-}
+      GIT_SHA: ${IMAGE_TAG:-dev}
+    depends_on:
+      postgres:
+        condition: service_healthy
+    logging: *logging
+
+  mockbank:
+    image: ${REGISTRY:-local}/build101-mockbank:${IMAGE_TAG:-dev}
+    restart: unless-stopped
+    environment:
+      GIT_SHA: ${IMAGE_TAG:-dev}
+    logging: *logging
+
+  postgres:
+    image: pgvector/pgvector:pg16
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: build101
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
+      POSTGRES_DB: build101
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U build101 -d build101"]
+      interval: 5s
+      timeout: 3s
+      retries: 20
+    logging: *logging
+
+volumes:
+  pgdata:
+  caddy_data:
+  caddy_config:

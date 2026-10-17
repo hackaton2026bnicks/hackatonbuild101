@@ -1,0 +1,14 @@
+# Local override: builds images from source instead of pulling from ECR.
+# Usage (from the repo root):
+#   docker compose -f infra/docker-compose.yml -f infra/docker-compose.dev.yml --env-file infra/.env.example up --build
+
+services:
+  api:
+    build: ../server
+    image: build101-api:dev
+  worker:
+    build: ../worker
+    image: build101-worker:dev
+  mockbank:
+    build: ../scenario
+    image: build101-mockbank:dev

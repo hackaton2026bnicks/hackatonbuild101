@@ -1,0 +1,17 @@
+# APP_HOST is a domain (HTTPS certificate issued automatically) or http://localhost for local runs.
+{$APP_HOST} {
+	encode gzip
+
+	handle_path /api/* {
+		reverse_proxy api:8000
+	}
+
+	handle_path /bank/* {
+		reverse_proxy mockbank:8000
+	}
+
+	handle {
+		root * /srv/ui
+		file_server
+	}
+}

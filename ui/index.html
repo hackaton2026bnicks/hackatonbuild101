@@ -1,0 +1,41 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>build101 dashboard</title>
+  <style>
+    :root { color-scheme: light dark; font-family: system-ui, sans-serif; }
+    body { max-width: 640px; margin: 64px auto; padding: 0 16px; line-height: 1.5; }
+    table { border-collapse: collapse; width: 100%; }
+    td { padding: 8px 0; border-bottom: 1px solid #8884; }
+    .ok { color: #0b7466; } .down { color: #b4312a; }
+  </style>
+</head>
+<body>
+  <h1>build101</h1>
+  <p>Team dashboard. The live agent feed goes here. For now it only shows whether each service is up.</p>
+  <table>
+    <tbody>
+      <tr><td>api</td><td id="api">checking…</td></tr>
+      <tr><td>mockbank</td><td id="bank">checking…</td></tr>
+    </tbody>
+  </table>
+  <script>
+    async function check(id, url) {
+      const cell = document.getElementById(id);
+      try {
+        const res = await fetch(url);
+        const body = await res.json();
+        cell.textContent = res.ok ? `up · ${body.version}` : `down · HTTP ${res.status}`;
+        cell.className = res.ok ? "ok" : "down";
+      } catch {
+        cell.textContent = "down · no response";
+        cell.className = "down";
+      }
+    }
+    check("api", "/api/health");
+    check("bank", "/bank/health");
+  </script>
+</body>
+</html>

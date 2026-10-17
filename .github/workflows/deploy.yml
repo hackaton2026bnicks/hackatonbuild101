@@ -1,0 +1,113 @@
+name: Deploy
+
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+# Never run two deploys at the same time; queue them instead
+concurrency:
+  group: deploy
+  cancel-in-progress: false
+
+permissions:
+  contents: read
+  id-token: write
+
+jobs:
+  test:
+    uses: ./.github/workflows/ci.yml
+
+  deploy:
+    needs: test
+    runs-on: ubuntu-latest
+    env:
+      AWS_REGION: ${{ vars.AWS_REGION }}
+      INSTANCE_ID: ${{ vars.EC2_INSTANCE_ID }}
+      APP_HOST: ${{ vars.APP_HOST }}
+      IMAGE_TAG: ${{ github.sha }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Log in to AWS (OIDC, no stored keys)
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          role-to-assume: ${{ vars.AWS_ROLE_ARN }}
+          aws-region: ${{ vars.AWS_REGION }}
+
+      - name: Log in to ECR
+        id: ecr
+        uses: aws-actions/amazon-ecr-login@v2
+
+      - name: Build and push images
+        env:
+          REGISTRY: ${{ steps.ecr.outputs.registry }}
+        run: |
+          for pair in api:server worker:worker mockbank:scenario; do
+            service="${pair%%:*}"
+            context="${pair#*:}"
+            image="$REGISTRY/build101-$service:$IMAGE_TAG"
+            docker build -t "$image" "$context"
+            docker push "$image"
+          done
+
+      - name: Deploy to EC2 through SSM
+        env:
+          REGISTRY: ${{ steps.ecr.outputs.registry }}
+        run: |
+          # Ship the compose files and the UI inside the command itself, so the server needs no git access
+          bundle=$(tar czf - infra ui | base64 -w0)
+          params=$(jq -n \
+            --arg bundle "$bundle" --arg registry "$REGISTRY" --arg tag "$IMAGE_TAG" --arg region "$AWS_REGION" \
+            '{
+              commands: [
+                "set -eu",
+                "mkdir -p /opt/build101",
+                "echo \($bundle) | base64 -d | tar xzf - -C /opt/build101",
+                "bash /opt/build101/infra/remote-deploy.sh \($registry) \($tag) \($region)"
+              ],
+              executionTimeout: ["900"]
+            }')
+
+          command_id=$(aws ssm send-command \
+            --instance-ids "$INSTANCE_ID" \
+            --document-name AWS-RunShellScript \
+            --comment "deploy $IMAGE_TAG" \
+            --parameters "$params" \
+            --query Command.CommandId --output text)
+          echo "SSM command $command_id"
+
+          status=Pending
+          for _ in $(seq 1 90); do
+            sleep 10
+            status=$(aws ssm get-command-invocation --command-id "$command_id" --instance-id "$INSTANCE_ID" \
+              --query Status --output text 2>/dev/null || echo Pending)
+            case "$status" in
+              Pending|InProgress|Delayed) echo "status: $status" ;;
+              *) break ;;
+            esac
+          done
+
+          echo "::group::Server output"
+          aws ssm get-command-invocation --command-id "$command_id" --instance-id "$INSTANCE_ID" \
+            --query '[StandardOutputContent, StandardErrorContent]' --output text
+          echo "::endgroup::"
+
+          if [ "$status" != "Success" ]; then
+            echo "::error::Deploy command finished with status $status"
+            exit 1
+          fi
+
+      - name: Smoke test
+        run: |
+          for _ in $(seq 1 30); do
+            if curl -fsS "https://$APP_HOST/api/health" | grep -q "$IMAGE_TAG" \
+              && curl -fsS "https://$APP_HOST/bank/health" >/dev/null; then
+              echo "Live at https://$APP_HOST (version $IMAGE_TAG)"
+              echo "Deployed \`$IMAGE_TAG\` to https://$APP_HOST" >> "$GITHUB_STEP_SUMMARY"
+              exit 0
+            fi
+            sleep 5
+          done
+          echo "::error::https://$APP_HOST/api/health did not report version $IMAGE_TAG"
+          exit 1
