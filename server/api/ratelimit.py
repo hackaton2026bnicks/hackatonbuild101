@@ -15,7 +15,6 @@ WINDOW_SECONDS = 60
 PER_KEY = 1200  # an agent fires a few hooks per second at most
 PER_IP = 3000
 PER_IP_WITHOUT_KEY = 120
-EXEMPT_PATHS = {"/health"}
 
 
 class RateLimiter:
@@ -41,8 +40,6 @@ class RateLimiter:
 
 
 async def rate_limit_middleware(request: Request, call_next):
-    if request.url.path in EXEMPT_PATHS:
-        return await call_next(request)
     limiter: RateLimiter = request.app.state.rate_limiter
     authorization = request.headers.get("authorization", "")
     token = authorization[7:].strip() if authorization.lower().startswith("bearer ") else None
