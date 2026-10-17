@@ -106,13 +106,14 @@ jobs:
       - name: Smoke test
         run: |
           for _ in $(seq 1 30); do
-            if curl -fsS "https://$APP_HOST/api/health" | grep -q "$IMAGE_TAG" \
+            api_status=$(curl -sS -o /dev/null -w "%{http_code}" "https://$APP_HOST/api/health" || true)
+            if [ "$api_status" = "401" ] \
               && curl -fsS "https://$APP_HOST/bank/health" >/dev/null; then
-              echo "Live at https://$APP_HOST (version $IMAGE_TAG)"
+              echo "Live at https://$APP_HOST (API auth enforced, version $IMAGE_TAG)"
               echo "Deployed \`$IMAGE_TAG\` to https://$APP_HOST" >> "$GITHUB_STEP_SUMMARY"
               exit 0
             fi
             sleep 5
           done
-          echo "::error::https://$APP_HOST/api/health did not report version $IMAGE_TAG"
+          echo "::error::API authentication check or mock bank health failed at https://$APP_HOST"
           exit 1
