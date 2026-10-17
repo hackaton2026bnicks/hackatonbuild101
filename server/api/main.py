@@ -24,6 +24,7 @@ from api.models import (
     KeyRequest,
     MessageCreate,
 )
+from api.ratelimit import RateLimiter, rate_limit_middleware
 from api.scrub import scrub
 
 KEEPALIVE_SECONDS = 15
@@ -41,6 +42,8 @@ async def lifespan(app: FastAPI):
 
 
 app = FastAPI(title="build101 api", lifespan=lifespan)
+app.state.rate_limiter = RateLimiter()
+app.middleware("http")(rate_limit_middleware)
 
 Caller = Annotated[Principal, Depends(require_key)]
 
