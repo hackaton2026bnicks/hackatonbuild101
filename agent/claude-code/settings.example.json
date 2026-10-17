@@ -5,7 +5,7 @@
         "hooks": [
           {
             "type": "command",
-            "command": "curl -s -m 5 -X POST https://54-89-124-87.sslip.io/api/hooks/claude-code -H \"Authorization: Bearer $BUILD101_KEY\" -H \"Content-Type: application/json\" --data-binary @- || true",
+            "command": "python \"$BUILD101_HOME/agent/claude-code/forward.py\"",
             "timeout": 10
           }
         ]
@@ -15,11 +15,9 @@
       {
         "hooks": [
           {
-            "type": "http",
-            "url": "https://54-89-124-87.sslip.io/api/hooks/claude-code",
-            "headers": { "Authorization": "Bearer $BUILD101_KEY" },
-            "allowedEnvVars": ["BUILD101_KEY"],
-            "timeout": 5
+            "type": "command",
+            "command": "python \"$BUILD101_HOME/agent/claude-code/forward.py\"",
+            "timeout": 10
           }
         ]
       }
@@ -29,11 +27,9 @@
         "matcher": "*",
         "hooks": [
           {
-            "type": "http",
-            "url": "https://54-89-124-87.sslip.io/api/hooks/claude-code",
-            "headers": { "Authorization": "Bearer $BUILD101_KEY" },
-            "allowedEnvVars": ["BUILD101_KEY"],
-            "timeout": 5
+            "type": "command",
+            "command": "python \"$BUILD101_HOME/agent/claude-code/forward.py\"",
+            "timeout": 10
           }
         ]
       }
@@ -43,11 +39,9 @@
         "matcher": "*",
         "hooks": [
           {
-            "type": "http",
-            "url": "https://54-89-124-87.sslip.io/api/hooks/claude-code",
-            "headers": { "Authorization": "Bearer $BUILD101_KEY" },
-            "allowedEnvVars": ["BUILD101_KEY"],
-            "timeout": 5
+            "type": "command",
+            "command": "python \"$BUILD101_HOME/agent/claude-code/forward.py\"",
+            "timeout": 10
           }
         ]
       }
@@ -57,11 +51,9 @@
         "matcher": "*",
         "hooks": [
           {
-            "type": "http",
-            "url": "https://54-89-124-87.sslip.io/api/hooks/claude-code",
-            "headers": { "Authorization": "Bearer $BUILD101_KEY" },
-            "allowedEnvVars": ["BUILD101_KEY"],
-            "timeout": 5
+            "type": "command",
+            "command": "python \"$BUILD101_HOME/agent/claude-code/forward.py\"",
+            "timeout": 10
           }
         ]
       }
@@ -70,11 +62,9 @@
       {
         "hooks": [
           {
-            "type": "http",
-            "url": "https://54-89-124-87.sslip.io/api/hooks/claude-code",
-            "headers": { "Authorization": "Bearer $BUILD101_KEY" },
-            "allowedEnvVars": ["BUILD101_KEY"],
-            "timeout": 5
+            "type": "command",
+            "command": "python \"$BUILD101_HOME/agent/claude-code/forward.py\"",
+            "timeout": 10
           }
         ]
       }
@@ -83,11 +73,9 @@
       {
         "hooks": [
           {
-            "type": "http",
-            "url": "https://54-89-124-87.sslip.io/api/hooks/claude-code",
-            "headers": { "Authorization": "Bearer $BUILD101_KEY" },
-            "allowedEnvVars": ["BUILD101_KEY"],
-            "timeout": 5
+            "type": "command",
+            "command": "python \"$BUILD101_HOME/agent/claude-code/forward.py\"",
+            "timeout": 10
           }
         ]
       }
@@ -97,8 +85,8 @@
         "hooks": [
           {
             "type": "command",
-            "command": "curl -s -m 3 -X POST https://54-89-124-87.sslip.io/api/hooks/claude-code -H \"Authorization: Bearer $BUILD101_KEY\" -H \"Content-Type: application/json\" --data-binary @- >/dev/null || true",
-            "timeout": 5
+            "command": "python \"$BUILD101_HOME/agent/claude-code/forward.py\"",
+            "timeout": 10
           }
         ]
       }
