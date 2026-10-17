@@ -10,6 +10,7 @@ worker/     background jobs: distiller and criteria miner
 scenario/   mock bank with undocumented traps for the demo
 ui/         team dashboard (static, served by Caddy)
 infra/      docker compose, Caddy, AWS bootstrap and deploy scripts
+tools/      helper scripts, such as a fake agent session for testing
 docs/       spec
 ```
 
@@ -20,6 +21,11 @@ Coming next: `agent/` (local hook receiver, scrubber, canonicalizer, trigger ind
 ```bash
 python -m venv .venv && source .venv/Scripts/activate   # .venv/bin/activate on macOS/Linux
 pip install -r requirements-dev.txt -r server/requirements.txt -r scenario/requirements.txt
+
+# API tests need a Postgres; they are skipped without TEST_DATABASE_URL
+docker run -d --rm --name b101-testdb -e POSTGRES_USER=build101 -e POSTGRES_PASSWORD=test \
+  -e POSTGRES_DB=build101 -p 55432:5432 pgvector/pgvector:pg16
+export TEST_DATABASE_URL=postgresql://build101:test@localhost:55432/build101
 ruff check . && pytest
 ```
 
@@ -29,7 +35,39 @@ Full stack with Docker (Postgres, Caddy and all services, built from source):
 docker compose -f infra/docker-compose.yml -f infra/docker-compose.dev.yml --env-file infra/.env.example up --build
 ```
 
-Then open http://localhost. The API is under `/api`, the mock bank under `/bank`.
+Then open http://localhost. The API is under `/api`, the mock bank under `/bank`. Create a key with the local admin token and send a fake agent session to see the dashboard move:
+
+```bash
+curl -X POST http://localhost/api/admin/keys -H "Authorization: Bearer dev-admin-token" \
+  -H "Content-Type: application/json" -d '{"user": "ana"}'
+python tools/simulate_agents.py --url http://localhost/api --key b101_...
+```
+
+## API
+
+Every endpoint except `/health` needs `Authorization: Bearer <key>`. Each key belongs to one person and one team; you only see your team's data.
+
+| Method | Path | What it does |
+|---|---|---|
+| GET | `/api/health` | Version and database status (public) |
+| GET | `/api/me` | Who this key belongs to |
+| POST | `/api/events` | Ingest a batch of normalized events (`{"events": [...]}`, max 500, 64 KB payload each) |
+| GET | `/api/sessions?active_minutes=60` | Your team's recent sessions: who, which agent, intent, last action, state |
+| GET | `/api/sessions/{id}/events` | Full events of one session, newest first |
+| GET | `/api/feed` | Server-sent events stream of everything your team ingests from now on |
+| POST/GET/DELETE | `/api/admin/keys` | Create, list and revoke keys (admin token only) |
+
+Event schema: see [docs/SPEC.md](docs/SPEC.md) section 3. Put an already canonicalized action in `payload.canonical` and it becomes the line shown in the feed.
+
+### Keys for teammates
+
+On the deployed server, create one key per person (needs AWS CLI access to read the admin token):
+
+```bash
+./infra/create-key.sh ana
+```
+
+The key is shown once. Revoke one with `DELETE /api/admin/keys/{id}`.
 
 ## Deploy
 
@@ -58,7 +96,7 @@ You need the AWS CLI logged in with an admin user (`aws configure` or `aws sso l
 
    Both variables are optional. `ALERT_EMAIL` creates a 25 USD/month budget alert. `AWS_REGION` defaults to `us-east-1`. The script is safe to re-run.
 
-2. In GitHub, go to Settings > Secrets and variables > Actions > Variables and add the four values the script prints: `AWS_REGION`, `AWS_ROLE_ARN`, `EC2_INSTANCE_ID`, `APP_HOST`.
+2. In GitHub, go to Settings > Secrets and variables > Actions and add the values the script prints: `AWS_ROLE_ARN` as a **secret**, and `AWS_REGION`, `EC2_INSTANCE_ID`, `APP_HOST` as **variables**.
 
 3. Push to `main`, or run the Deploy workflow by hand from the Actions tab.
 
