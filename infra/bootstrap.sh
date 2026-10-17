@@ -9,7 +9,7 @@
 #   ALERT_EMAIL=you@example.com ANTHROPIC_API_KEY=sk-ant-... ./infra/bootstrap.sh
 #
 # Optional variables: AWS_REGION (default us-east-1), INSTANCE_TYPE (default t3.small),
-# BUDGET_USD (default 25), GITHUB_REPO (default nicolastognola/hackatonbuild101).
+# BUDGET_USD (default 25), GITHUB_REPO (default hackaton2026bnicks/hackatonbuild101).
 set -euo pipefail
 
 # Git Bash would otherwise rewrite arguments like "/build101/APP_HOST" into Windows paths
@@ -18,7 +18,7 @@ export AWS_PAGER=""
 
 PROJECT="build101"
 REGION="${AWS_REGION:-us-east-1}"
-GITHUB_REPO="${GITHUB_REPO:-nicolastognola/hackatonbuild101}"
+GITHUB_REPO="${GITHUB_REPO:-hackaton2026bnicks/hackatonbuild101}"
 INSTANCE_TYPE="${INSTANCE_TYPE:-t3.small}"
 BUDGET_USD="${BUDGET_USD:-25}"
 ALERT_EMAIL="${ALERT_EMAIL:-}"
@@ -169,6 +169,11 @@ if ! aws ssm get-parameter --name "/$PROJECT/POSTGRES_PASSWORD" >/dev/null 2>&1;
 else
   echo "exists  /$PROJECT/POSTGRES_PASSWORD"
 fi
+if ! aws ssm get-parameter --name "/$PROJECT/ADMIN_TOKEN" >/dev/null 2>&1; then
+  put_param ADMIN_TOKEN SecureString "$(openssl rand -hex 32)"
+else
+  echo "exists  /$PROJECT/ADMIN_TOKEN"
+fi
 if [ -n "${ANTHROPIC_API_KEY:-}" ]; then
   put_param ANTHROPIC_API_KEY SecureString "$ANTHROPIC_API_KEY"
 else
@@ -265,11 +270,15 @@ echo "SSM status: $PING"
 
 cat <<EOF
 
-Done. Add these as repository variables in GitHub
-(Settings > Secrets and variables > Actions > Variables tab > New repository variable):
+Done. Add these in GitHub (Settings > Secrets and variables > Actions).
+
+Secrets tab > New repository secret:
+
+  AWS_ROLE_ARN      $GH_ROLE_ARN
+
+Variables tab > New repository variable:
 
   AWS_REGION        $REGION
-  AWS_ROLE_ARN      $GH_ROLE_ARN
   EC2_INSTANCE_ID   $INSTANCE_ID
   APP_HOST          $APP_HOST
 

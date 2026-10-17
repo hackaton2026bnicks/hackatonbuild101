@@ -3,39 +3,241 @@
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
-  <title>build101 dashboard</title>
+  <title>build101 · team agents</title>
   <style>
-    :root { color-scheme: light dark; font-family: system-ui, sans-serif; }
-    body { max-width: 640px; margin: 64px auto; padding: 0 16px; line-height: 1.5; }
-    table { border-collapse: collapse; width: 100%; }
-    td { padding: 8px 0; border-bottom: 1px solid #8884; }
-    .ok { color: #0b7466; } .down { color: #b4312a; }
+    :root {
+      --bg: #f5f6f8; --surface: #fff; --fg: #151a22; --muted: #5a6372; --line: #d6dae1;
+      --accent: #2f55e4; --ok: #0b7466; --warn: #a85c06; --bad: #b4312a;
+      color-scheme: light;
+      font-family: system-ui, "Segoe UI", sans-serif;
+    }
+    @media (prefers-color-scheme: dark) {
+      :root {
+        --bg: #0f1218; --surface: #171b23; --fg: #e6e9ef; --muted: #98a1b0; --line: #2c333f;
+        --accent: #7d9bff; --ok: #4fcab6; --warn: #f0a54a; --bad: #f08a82;
+        color-scheme: dark;
+      }
+    }
+    * { box-sizing: border-box; }
+    body { margin: 0; background: var(--bg); color: var(--fg); line-height: 1.5; padding: 24px 16px 64px; }
+    main { max-width: 1100px; margin: 0 auto; display: flex; flex-direction: column; gap: 24px; }
+    header { display: flex; justify-content: space-between; align-items: baseline; gap: 12px; flex-wrap: wrap; }
+    h1 { margin: 0; font-size: 1.5rem; }
+    h2 { margin: 0 0 10px; font-size: 1rem; }
+    .muted { color: var(--muted); font-size: 0.9rem; }
+    .card { background: var(--surface); border: 1px solid var(--line); border-radius: 8px; padding: 16px; min-width: 0; }
+    .grid { display: grid; grid-template-columns: 3fr 2fr; gap: 16px; align-items: start; }
+    @media (max-width: 800px) { .grid { grid-template-columns: 1fr; } }
+    table { width: 100%; border-collapse: collapse; font-size: 0.9rem; }
+    th { text-align: left; color: var(--muted); font-weight: 500; font-size: 0.75rem; text-transform: uppercase; letter-spacing: 0.05em; padding: 6px 8px; border-bottom: 1px solid var(--line); }
+    td { padding: 8px; border-bottom: 1px solid var(--line); vertical-align: top; }
+    .scroll { overflow-x: auto; }
+    code, .mono { font-family: ui-monospace, Consolas, monospace; font-size: 0.82rem; }
+    .pill { font-size: 0.75rem; padding: 1px 8px; border-radius: 99px; white-space: nowrap; border: 1px solid currentColor; }
+    .live { color: var(--ok); } .idle { color: var(--warn); } .ended { color: var(--muted); } .down { color: var(--bad); }
+    #feed { list-style: none; margin: 0; padding: 0; max-height: 520px; overflow-y: auto; display: flex; flex-direction: column; }
+    #feed li { padding: 8px 0; border-bottom: 1px solid var(--line); font-size: 0.88rem; }
+    #feed li .who { font-weight: 600; }
+    form { display: flex; gap: 8px; flex-wrap: wrap; }
+    input { flex: 1 1 280px; padding: 8px 10px; border: 1px solid var(--line); border-radius: 6px; background: var(--bg); color: var(--fg); font: inherit; }
+    button { padding: 8px 14px; border: 1px solid var(--line); border-radius: 6px; background: var(--accent); color: #fff; font: inherit; cursor: pointer; }
+    button.secondary { background: transparent; color: var(--fg); }
+    button:focus-visible, input:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+    .error { color: var(--bad); font-size: 0.9rem; }
   </style>
 </head>
 <body>
-  <h1>build101</h1>
-  <p>Team dashboard. The live agent feed goes here. For now it only shows whether each service is up.</p>
-  <table>
-    <tbody>
-      <tr><td>api</td><td id="api">checking…</td></tr>
-      <tr><td>mockbank</td><td id="bank">checking…</td></tr>
-    </tbody>
-  </table>
-  <script>
-    async function check(id, url) {
-      const cell = document.getElementById(id);
+<main>
+  <header>
+    <h1>Team agents</h1>
+    <span class="muted" id="status">api: checking… · mockbank: checking…</span>
+  </header>
+
+  <section class="card" id="login">
+    <h2>Sign in with your API key</h2>
+    <p class="muted">Ask whoever runs the server for a key (<code>./infra/create-key.sh your-name</code>). It stays in this browser only.</p>
+    <form id="login-form">
+      <label for="key" hidden>API key</label>
+      <input id="key" type="password" placeholder="b101_…" autocomplete="off" required>
+      <button type="submit">Sign in</button>
+    </form>
+    <p class="error" id="login-error" hidden></p>
+  </section>
+
+  <div class="grid" id="app" hidden>
+    <section class="card">
+      <h2>What each agent is doing <span class="muted" id="me"></span></h2>
+      <div class="scroll">
+        <table>
+          <thead><tr><th>Person · agent</th><th>Intent</th><th>Last action</th><th>State</th></tr></thead>
+          <tbody id="sessions"><tr><td colspan="4" class="muted">No sessions in the last hour. Start an agent with the hooks installed and it shows up here.</td></tr></tbody>
+        </table>
+      </div>
+    </section>
+    <section class="card">
+      <h2>Live feed <span class="pill down" id="feed-state">connecting</span></h2>
+      <ul id="feed"><li class="muted" id="feed-empty">Waiting for events…</li></ul>
+      <p><button class="secondary" id="logout" type="button">Sign out</button></p>
+    </section>
+  </div>
+</main>
+
+<script>
+  const STORAGE_KEY = "build101-key";
+  const IDLE_SECONDS = 120;
+  let apiKey = null;
+  let feedAbort = null;
+
+  function store(value) {
+    try { value ? localStorage.setItem(STORAGE_KEY, value) : localStorage.removeItem(STORAGE_KEY); } catch {}
+  }
+  function stored() {
+    try { return localStorage.getItem(STORAGE_KEY); } catch { return null; }
+  }
+  function el(tag, text, className) {
+    const node = document.createElement(tag);
+    if (text !== undefined) node.textContent = text;
+    if (className) node.className = className;
+    return node;
+  }
+  function ago(iso) {
+    const seconds = Math.max(0, Math.round((Date.now() - new Date(iso)) / 1000));
+    if (seconds < 60) return `${seconds}s ago`;
+    if (seconds < 3600) return `${Math.round(seconds / 60)}m ago`;
+    return `${Math.round(seconds / 3600)}h ago`;
+  }
+  async function api(path) {
+    const res = await fetch(`/api${path}`, { headers: { Authorization: `Bearer ${apiKey}` } });
+    if (res.status === 401) throw new Error("unauthorized");
+    if (!res.ok) throw new Error(`HTTP ${res.status}`);
+    return res.json();
+  }
+
+  async function checkStatus() {
+    const parts = [];
+    for (const [name, url] of [["api", "/api/health"], ["mockbank", "/bank/health"]]) {
       try {
         const res = await fetch(url);
         const body = await res.json();
-        cell.textContent = res.ok ? `up · ${body.version}` : `down · HTTP ${res.status}`;
-        cell.className = res.ok ? "ok" : "down";
+        parts.push(`${name}: ${res.ok ? "up" : "down"} · ${body.version || ""}`);
       } catch {
-        cell.textContent = "down · no response";
-        cell.className = "down";
+        parts.push(`${name}: down`);
       }
     }
-    check("api", "/api/health");
-    check("bank", "/bank/health");
-  </script>
+    document.getElementById("status").textContent = parts.join("  |  ");
+  }
+
+  async function refreshSessions() {
+    if (!apiKey) return;
+    try {
+      const { sessions } = await api("/sessions?active_minutes=60");
+      const body = document.getElementById("sessions");
+      if (!sessions.length) return;
+      body.replaceChildren(...sessions.map((s) => {
+        const row = el("tr");
+        const who = el("td");
+        who.append(el("strong", s.user), document.createTextNode(` · ${s.agent}`));
+        who.append(el("div", s.session_id.slice(0, 12), "muted mono"));
+        const intent = el("td", s.intent || "—");
+        const last = el("td");
+        last.append(el("div", s.last_summary, "mono"), el("div", `${s.last_event_type} · ${ago(s.last_event_at)}`, "muted"));
+        const idle = (Date.now() - new Date(s.last_event_at)) / 1000 > IDLE_SECONDS;
+        const [label, cls] = s.ended_at ? ["ended", "ended"] : idle ? ["idle", "idle"] : ["working", "live"];
+        const state = el("td");
+        state.append(el("span", label, `pill ${cls}`));
+        row.append(who, intent, last, state);
+        return row;
+      }));
+    } catch (err) {
+      if (err.message === "unauthorized") signOut("Your key was revoked or is invalid.");
+    }
+  }
+
+  function addFeedItem(item) {
+    document.getElementById("feed-empty")?.remove();
+    const li = el("li");
+    li.append(el("span", item.user, "who"), document.createTextNode(` · ${item.agent} · ${item.type}`));
+    li.append(el("div", item.summary, "mono"));
+    const feed = document.getElementById("feed");
+    feed.prepend(li);
+    while (feed.children.length > 200) feed.lastChild.remove();
+  }
+
+  // EventSource cannot send an Authorization header, so the stream is read with fetch
+  async function connectFeed() {
+    const state = document.getElementById("feed-state");
+    while (apiKey) {
+      feedAbort = new AbortController();
+      try {
+        const res = await fetch("/api/feed", { headers: { Authorization: `Bearer ${apiKey}` }, signal: feedAbort.signal });
+        if (res.status === 401) return signOut("Your key was revoked or is invalid.");
+        state.textContent = "live";
+        state.className = "pill live";
+        const reader = res.body.pipeThrough(new TextDecoderStream()).getReader();
+        let buffer = "";
+        for (;;) {
+          const { value, done } = await reader.read();
+          if (done) break;
+          buffer += value;
+          let cut;
+          while ((cut = buffer.indexOf("\n\n")) >= 0) {
+            const message = buffer.slice(0, cut);
+            buffer = buffer.slice(cut + 2);
+            const data = message.split("\n").find((line) => line.startsWith("data: "));
+            if (data) {
+              addFeedItem(JSON.parse(data.slice(6)));
+              refreshSessions();
+            }
+          }
+        }
+      } catch (err) {
+        if (err.name === "AbortError") return;
+      }
+      state.textContent = "reconnecting";
+      state.className = "pill down";
+      await new Promise((resolve) => setTimeout(resolve, 3000));
+    }
+  }
+
+  async function signIn(key) {
+    apiKey = key;
+    try {
+      const me = await api("/me");
+      store(key);
+      document.getElementById("me").textContent = `· signed in as ${me.user} (${me.team})`;
+      document.getElementById("login").hidden = true;
+      document.getElementById("app").hidden = false;
+      refreshSessions();
+      connectFeed();
+    } catch (err) {
+      apiKey = null;
+      const error = document.getElementById("login-error");
+      error.textContent = err.message === "unauthorized" ? "That key is not valid." : `Could not reach the API (${err.message}).`;
+      error.hidden = false;
+    }
+  }
+
+  function signOut(message) {
+    apiKey = null;
+    store(null);
+    feedAbort?.abort();
+    document.getElementById("app").hidden = true;
+    document.getElementById("login").hidden = false;
+    const error = document.getElementById("login-error");
+    error.textContent = message || "";
+    error.hidden = !message;
+  }
+
+  document.getElementById("login-form").addEventListener("submit", (event) => {
+    event.preventDefault();
+    signIn(document.getElementById("key").value.trim());
+  });
+  document.getElementById("logout").addEventListener("click", () => signOut());
+
+  checkStatus();
+  setInterval(refreshSessions, 10000);
+  const saved = stored();
+  if (saved) signIn(saved);
+</script>
 </body>
 </html>
