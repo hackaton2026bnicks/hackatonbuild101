@@ -2,19 +2,34 @@
 
 import asyncio
 import json
+import logging
 import os
 from contextlib import asynccontextmanager
 from typing import Annotated
 
-from fastapi import Depends, FastAPI, HTTPException, Query, Request
+from fastapi import Depends, FastAPI, Header, HTTPException, Query, Request
 from fastapi.responses import StreamingResponse
 
+from api import collab
 from api.auth import Principal, hash_key, new_key, require_admin, require_key
 from api.broker import Broker
 from api.db import Database
-from api.models import Conversation, ConversationCreate, EventBatch, KeyRequest
+from api.hooks import parse as parse_hook
+from api.models import (
+    DEFAULT_TTL_MINUTES,
+    PRIORITY,
+    Conversation,
+    ConversationCreate,
+    EventBatch,
+    KeyRequest,
+    MessageCreate,
+)
+from api.ratelimit import RateLimiter, rate_limit_middleware
+from api.scrub import scrub
 
 KEEPALIVE_SECONDS = 15
+
+log = logging.getLogger("api")
 
 
 @asynccontextmanager
@@ -33,6 +48,8 @@ app = FastAPI(
     redoc_url=None,
     openapi_url=None,
 )
+app.state.rate_limiter = RateLimiter()
+app.middleware("http")(rate_limit_middleware)
 
 Caller = Annotated[Principal, Depends(require_key)]
 
@@ -75,6 +92,51 @@ async def session_events(
 ) -> dict:
     rows = await request.app.state.db.session_events(caller.team, session_id, limit)
     return {"events": rows}
+
+
+@app.post("/hooks/claude-code")
+async def claude_code_hook(
+    caller: Caller,
+    request: Request,
+    x_build101_repo: Annotated[str | None, Header()] = None,
+) -> dict:
+    """Target of Claude Code HTTP hooks. Never fails the agent: on any internal error it answers {}."""
+    try:
+        raw = await request.json()
+        call = parse_hook(raw, x_build101_repo) if isinstance(raw, dict) else None
+        if call is None:
+            return {}
+        return await collab.handle(request.app.state.db, request.app.state.broker, caller, call)
+    except Exception:
+        log.exception("hook processing failed")
+        return {}
+
+
+@app.post("/messages", status_code=201)
+async def publish_message(body: MessageCreate, caller: Caller, request: Request) -> dict:
+    message = await request.app.state.db.create_message(
+        caller.team,
+        body.kind,
+        scrub(body.body),
+        body.topics,
+        from_user=caller.user,
+        from_session=body.session_id,
+        priority=PRIORITY[body.kind],
+        ttl_minutes=body.ttl_minutes or DEFAULT_TTL_MINUTES[body.kind],
+    )
+    request.app.state.broker.publish(caller.team, collab.feed_item(message, caller.user))
+    return message
+
+
+@app.get("/messages")
+async def messages(
+    caller: Caller,
+    request: Request,
+    include_expired: bool = False,
+    limit: Annotated[int, Query(ge=1, le=200)] = 50,
+) -> dict:
+    rows = await request.app.state.db.list_messages(caller.team, include_expired, limit)
+    return {"messages": rows}
 
 
 @app.post("/conversations", status_code=201, response_model=Conversation)

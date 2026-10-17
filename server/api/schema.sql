@@ -52,3 +52,47 @@ CREATE TABLE IF NOT EXISTS conversacion (
 );
 
 CREATE INDEX IF NOT EXISTS conversacion_timestamp ON conversacion ("timestamp" DESC, id DESC);
+
+-- What each session is touching right now: its situation, used to route messages and spot conflicts.
+CREATE TABLE IF NOT EXISTS session_resources (
+    team        text NOT NULL,
+    session_id  text NOT NULL,
+    kind        text NOT NULL,           -- repo | host | file | edit
+    value       text NOT NULL,
+    user_name   text NOT NULL,
+    repo        text NOT NULL,
+    agent_id    text,
+    first_seen  timestamptz NOT NULL DEFAULT now(),
+    last_seen   timestamptz NOT NULL DEFAULT now(),
+    PRIMARY KEY (team, session_id, kind, value)
+);
+
+CREATE INDEX IF NOT EXISTS session_resources_lookup ON session_resources (team, kind, value, last_seen DESC);
+
+-- Messages between sessions: discoveries, alerts, notes and conflict warnings.
+CREATE TABLE IF NOT EXISTS messages (
+    id            bigserial PRIMARY KEY,
+    team          text NOT NULL,
+    kind          text NOT NULL,
+    topics        text[] NOT NULL DEFAULT '{}',
+    body          text NOT NULL,
+    from_user     text NOT NULL,
+    from_session  text,
+    priority      integer NOT NULL DEFAULT 0,
+    created_at    timestamptz NOT NULL DEFAULT now(),
+    expires_at    timestamptz NOT NULL
+);
+
+CREATE INDEX IF NOT EXISTS messages_team_expires ON messages (team, expires_at DESC);
+CREATE INDEX IF NOT EXISTS messages_topics ON messages USING gin (topics);
+
+-- One row per message and receiving session: what was injected, held out or skipped. Source of the metrics.
+CREATE TABLE IF NOT EXISTS deliveries (
+    message_id    bigint NOT NULL REFERENCES messages (id) ON DELETE CASCADE,
+    team          text NOT NULL,
+    session_id    text NOT NULL,
+    hook          text NOT NULL,
+    outcome       text NOT NULL,         -- injected | holdout
+    delivered_at  timestamptz NOT NULL DEFAULT now(),
+    PRIMARY KEY (message_id, session_id)
+);

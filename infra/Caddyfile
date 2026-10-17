@@ -1,5 +1,15 @@
 # APP_HOST is a domain (HTTPS certificate issued automatically) or http://localhost for local runs.
 {$APP_HOST} {
+	# Hook payloads are small once cleaned; anything bigger is a mistake or abuse
+	request_body /api/* {
+		max_size 2MB
+	}
+
+	# Admin endpoints are never reachable from the internet; use infra/keys.sh, which runs them inside the server
+	handle /api/admin/* {
+		respond "Not found" 404
+	}
+
 	# No compression on the API: it would buffer the server-sent events of /api/feed
 	handle_path /api/* {
 		reverse_proxy api:8000

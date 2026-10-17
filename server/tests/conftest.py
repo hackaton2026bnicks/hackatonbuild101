@@ -22,10 +22,15 @@ def client(monkeypatch):
     monkeypatch.setenv("ADMIN_TOKEN", ADMIN_TOKEN)
 
     from api.main import app
+    from api.ratelimit import RateLimiter
 
+    app.state.rate_limiter = RateLimiter()
     with TestClient(app) as test_client:
         with psycopg.connect(TEST_DATABASE_URL) as conn:
-            conn.execute("TRUNCATE api_keys, sessions, events, conversacion RESTART IDENTITY")
+            conn.execute(
+                "TRUNCATE api_keys, sessions, events, conversacion, session_resources, messages, deliveries "
+                "RESTART IDENTITY"
+            )
         yield test_client
 
 
