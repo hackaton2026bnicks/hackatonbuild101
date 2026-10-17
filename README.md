@@ -45,20 +45,20 @@ python tools/simulate_agents.py --url http://localhost/api --key b101_...
 
 ## API
 
-Every endpoint except `/health` and the demo conversation endpoints needs `Authorization: Bearer <key>`. Each key belongs to one person and one team; you only see your team's data.
+Every API endpoint requires authentication. Use an API key as `Authorization: Bearer <key>` for health, conversations, events, sessions and the live feed. Admin key-management endpoints require the admin token instead. Interactive API documentation is disabled on the server.
 
 | Method | Path | What it does |
 |---|---|---|
-| GET | `/api/health` | Version and database status (public) |
+| GET | `/api/health` | Version and database status (API key required) |
 | GET | `/api/me` | Who this key belongs to |
 | POST | `/api/events` | Ingest a batch of normalized events (`{"events": [...]}`, max 500, 64 KB payload each) |
 | GET | `/api/sessions?active_minutes=60` | Your team's recent sessions: who, which agent, intent, last action, state |
 | GET | `/api/sessions/{id}/events` | Full events of one session, newest first |
 | GET | `/api/feed` | Server-sent events stream of everything your team ingests from now on |
 | POST/GET/DELETE | `/api/admin/keys` | Create, list and revoke keys (admin token only) |
-| POST | `/api/conversations` | Save a conversation message (public demo endpoint; no API key) |
-| GET | `/api/conversations?limit=50&offset=0` | List recent conversation messages (public demo endpoint; no API key) |
-| GET | `/api/conversations/{id}` | Read one conversation message (public demo endpoint; no API key) |
+| POST | `/api/conversations` | Save a conversation message (API key required) |
+| GET | `/api/conversations?limit=50&offset=0` | List recent conversation messages (API key required) |
+| GET | `/api/conversations/{id}` | Read one conversation message (API key required) |
 
 Event schema: see [docs/SPEC.md](docs/SPEC.md) section 3. Put an already canonicalized action in `payload.canonical` and it becomes the line shown in the feed.
 
@@ -67,13 +67,16 @@ Conversation example:
 ```bash
 curl -X POST https://<APP_HOST>/api/conversations \
   -H "Content-Type: application/json" \
+  -H "Authorization: Bearer <API_KEY>" \
   -d '{"usuario":"ana","mensaje":"Texto largo del prompt..."}'
 
-curl "https://<APP_HOST>/api/conversations?limit=50&offset=0"
-curl https://<APP_HOST>/api/conversations/1
+curl "https://<APP_HOST>/api/conversations?limit=50&offset=0" \
+  -H "Authorization: Bearer <API_KEY>"
+curl https://<APP_HOST>/api/conversations/1 \
+  -H "Authorization: Bearer <API_KEY>"
 ```
 
-The `mensaje` field accepts up to 100,000 characters. The database assigns `id` and `timestamp` automatically. These demo routes intentionally have no authentication, so anyone who can reach the public app can submit and read every conversation; do not put sensitive or real user data here.
+The `mensaje` field accepts up to 100,000 characters. The database assigns `id` and `timestamp` automatically. HTTPS remains reachable from the Internet, but API routes reject requests without a valid API key (admin routes require the admin token). A valid API key currently grants access to all conversation records.
 
 ### Keys for teammates
 
