@@ -194,6 +194,20 @@ else
 fi
 
 GH_ROLE="$PROJECT-github-deploy"
+# Some orgs send an ID-based OIDC subject (repo:owner@<id>/name@<id>:ref:...), which survives renames.
+# Accept both formats, pinned to this repo's numeric ids when GitHub's public API can resolve them.
+GITHUB_IDS=$(curl -fsS "https://api.github.com/repos/$GITHUB_REPO" 2>/dev/null \
+  | python -c "import json,sys; d=json.load(sys.stdin); print(d['owner']['id'], d['id'])" 2>/dev/null || true)
+SUB_NAME="repo:$GITHUB_REPO:ref:refs/heads/main"
+if [ -n "$GITHUB_IDS" ]; then
+  read -r OWNER_ID REPO_ID <<< "$GITHUB_IDS"
+  SUB_IDS="repo:${GITHUB_REPO%%/*}@$OWNER_ID/${GITHUB_REPO#*/}@$REPO_ID:ref:refs/heads/main"
+  SUBJECTS="[\"$SUB_IDS\", \"$SUB_NAME\"]"
+else
+  echo "could not resolve GitHub ids for $GITHUB_REPO; trusting the name-based subject only"
+  SUBJECTS="[\"$SUB_NAME\"]"
+fi
+
 # Only workflows running on the main branch of this repo can assume the role
 ensure_role "$GH_ROLE" "$(cat <<EOF
 {
@@ -205,7 +219,7 @@ ensure_role "$GH_ROLE" "$(cat <<EOF
     "Condition": {
       "StringEquals": {
         "token.actions.githubusercontent.com:aud": "sts.amazonaws.com",
-        "token.actions.githubusercontent.com:sub": "repo:$GITHUB_REPO:ref:refs/heads/main"
+        "token.actions.githubusercontent.com:sub": $SUBJECTS
       }
     }
   }]
