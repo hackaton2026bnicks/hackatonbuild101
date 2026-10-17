@@ -9,7 +9,7 @@
 #   ALERT_EMAIL=you@example.com ANTHROPIC_API_KEY=sk-ant-... ./infra/bootstrap.sh
 #
 # Optional variables: AWS_REGION (default us-east-1), INSTANCE_TYPE (default t3.small),
-# BUDGET_USD (default 25), GITHUB_REPO (default nicolastognola/hackatonbuild101).
+# BUDGET_USD (default 25), GITHUB_REPO (default hackaton2026bnicks/hackatonbuild101).
 set -euo pipefail
 
 # Git Bash would otherwise rewrite arguments like "/build101/APP_HOST" into Windows paths
@@ -18,7 +18,7 @@ export AWS_PAGER=""
 
 PROJECT="build101"
 REGION="${AWS_REGION:-us-east-1}"
-GITHUB_REPO="${GITHUB_REPO:-nicolastognola/hackatonbuild101}"
+GITHUB_REPO="${GITHUB_REPO:-hackaton2026bnicks/hackatonbuild101}"
 INSTANCE_TYPE="${INSTANCE_TYPE:-t3.small}"
 BUDGET_USD="${BUDGET_USD:-25}"
 ALERT_EMAIL="${ALERT_EMAIL:-}"
