@@ -4,6 +4,9 @@ Known formats are matched by pattern; anything else that looks like a random tok
 (long, mixed letters and digits, high entropy) is redacted too.
 """
 
+# The hook forwarder imports this module on developer machines, where macOS still ships Python 3.9
+from __future__ import annotations
+
 import math
 import re
 from collections import Counter
