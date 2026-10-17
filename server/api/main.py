@@ -26,13 +26,19 @@ async def lifespan(app: FastAPI):
     await app.state.db.close()
 
 
-app = FastAPI(title="build101 api", lifespan=lifespan)
+app = FastAPI(
+    title="build101 api",
+    lifespan=lifespan,
+    docs_url=None,
+    redoc_url=None,
+    openapi_url=None,
+)
 
 Caller = Annotated[Principal, Depends(require_key)]
 
 
 @app.get("/health")
-async def health(request: Request) -> dict:
+async def health(request: Request, caller: Caller) -> dict:
     db_ok = await request.app.state.db.ping()
     return {
         "status": "ok",
@@ -72,12 +78,13 @@ async def session_events(
 
 
 @app.post("/conversations", status_code=201, response_model=Conversation)
-async def create_conversation(body: ConversationCreate, request: Request) -> dict:
+async def create_conversation(body: ConversationCreate, caller: Caller, request: Request) -> dict:
     return await request.app.state.db.create_conversation(body.usuario, body.mensaje)
 
 
 @app.get("/conversations", response_model=list[Conversation])
 async def conversations(
+    caller: Caller,
     request: Request,
     limit: Annotated[int, Query(ge=1, le=100)] = 50,
     offset: Annotated[int, Query(ge=0)] = 0,
@@ -86,7 +93,7 @@ async def conversations(
 
 
 @app.get("/conversations/{conversation_id}", response_model=Conversation)
-async def conversation(conversation_id: int, request: Request) -> dict:
+async def conversation(conversation_id: int, caller: Caller, request: Request) -> dict:
     row = await request.app.state.db.get_conversation(conversation_id)
     if row is None:
         raise HTTPException(404, "Conversation not found.")
