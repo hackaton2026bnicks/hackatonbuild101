@@ -46,15 +46,3 @@ jobs:
 
       - name: Check shell scripts
         run: bash -n infra/*.sh
-
-  images:
-    # On pull requests, make sure every image still builds. The deploy workflow builds and pushes on main.
-    if: github.event_name == 'pull_request'
-    runs-on: ubuntu-latest
-    steps:
-      - uses: actions/checkout@v7
-      - name: Build images
-        run: |
-          docker build -t build101-api server
-          docker build -t build101-worker worker
-          docker build -t build101-mockbank scenario

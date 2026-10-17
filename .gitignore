@@ -9,3 +9,7 @@ __pycache__/
 infra/.env
 data/
 *.db
+
+# Personal Claude Code settings and a scratch area for trying build101 together
+.claude/settings.local.json
+scratch/
