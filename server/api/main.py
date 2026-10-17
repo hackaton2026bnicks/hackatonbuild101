@@ -12,7 +12,7 @@ from fastapi.responses import StreamingResponse
 from api.auth import Principal, hash_key, new_key, require_admin, require_key
 from api.broker import Broker
 from api.db import Database
-from api.models import EventBatch, KeyRequest
+from api.models import Conversation, ConversationCreate, EventBatch, KeyRequest
 
 KEEPALIVE_SECONDS = 15
 
@@ -69,6 +69,28 @@ async def session_events(
 ) -> dict:
     rows = await request.app.state.db.session_events(caller.team, session_id, limit)
     return {"events": rows}
+
+
+@app.post("/conversations", status_code=201, response_model=Conversation)
+async def create_conversation(body: ConversationCreate, request: Request) -> dict:
+    return await request.app.state.db.create_conversation(body.usuario, body.mensaje)
+
+
+@app.get("/conversations", response_model=list[Conversation])
+async def conversations(
+    request: Request,
+    limit: Annotated[int, Query(ge=1, le=100)] = 50,
+    offset: Annotated[int, Query(ge=0)] = 0,
+) -> list[dict]:
+    return await request.app.state.db.list_conversations(limit, offset)
+
+
+@app.get("/conversations/{conversation_id}", response_model=Conversation)
+async def conversation(conversation_id: int, request: Request) -> dict:
+    row = await request.app.state.db.get_conversation(conversation_id)
+    if row is None:
+        raise HTTPException(404, "Conversation not found.")
+    return row
 
 
 @app.get("/feed")

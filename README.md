@@ -45,7 +45,7 @@ python tools/simulate_agents.py --url http://localhost/api --key b101_...
 
 ## API
 
-Every endpoint except `/health` needs `Authorization: Bearer <key>`. Each key belongs to one person and one team; you only see your team's data.
+Every endpoint except `/health` and the demo conversation endpoints needs `Authorization: Bearer <key>`. Each key belongs to one person and one team; you only see your team's data.
 
 | Method | Path | What it does |
 |---|---|---|
@@ -56,8 +56,24 @@ Every endpoint except `/health` needs `Authorization: Bearer <key>`. Each key be
 | GET | `/api/sessions/{id}/events` | Full events of one session, newest first |
 | GET | `/api/feed` | Server-sent events stream of everything your team ingests from now on |
 | POST/GET/DELETE | `/api/admin/keys` | Create, list and revoke keys (admin token only) |
+| POST | `/api/conversations` | Save a conversation message (public demo endpoint; no API key) |
+| GET | `/api/conversations?limit=50&offset=0` | List recent conversation messages (public demo endpoint; no API key) |
+| GET | `/api/conversations/{id}` | Read one conversation message (public demo endpoint; no API key) |
 
 Event schema: see [docs/SPEC.md](docs/SPEC.md) section 3. Put an already canonicalized action in `payload.canonical` and it becomes the line shown in the feed.
+
+Conversation example:
+
+```bash
+curl -X POST https://<APP_HOST>/api/conversations \
+  -H "Content-Type: application/json" \
+  -d '{"usuario":"ana","mensaje":"Texto largo del prompt..."}'
+
+curl "https://<APP_HOST>/api/conversations?limit=50&offset=0"
+curl https://<APP_HOST>/api/conversations/1
+```
+
+The `mensaje` field accepts up to 100,000 characters. The database assigns `id` and `timestamp` automatically. These demo routes intentionally have no authentication, so anyone who can reach the public app can submit and read every conversation; do not put sensitive or real user data here.
 
 ### Keys for teammates
 
@@ -83,6 +99,8 @@ push to main
 ```
 
 Pull requests run CI and build the images without pushing.
+
+On API startup, `server/api/schema.sql` runs idempotent `CREATE TABLE IF NOT EXISTS` statements, including the `conversacion` table. Therefore, pushing this change to `main` deploys the API and creates the table in the existing Postgres database; no separate AWS resource or manual migration command is needed. The existing Postgres data volume is retained across deploys.
 
 ### One-time setup
 

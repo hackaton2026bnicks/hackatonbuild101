@@ -148,3 +148,40 @@ class Database:
                 (team, session_id, limit),
             )
             return await cur.fetchall()
+
+    async def create_conversation(self, usuario: str, mensaje: str) -> dict:
+        async with self.pool.connection() as conn:
+            cur = await conn.execute(
+                """
+                INSERT INTO conversacion (usuario, mensaje)
+                VALUES (%s, %s)
+                RETURNING id, usuario, mensaje, "timestamp" AS timestamp
+                """,
+                (usuario, mensaje),
+            )
+            return await cur.fetchone()
+
+    async def get_conversation(self, conversation_id: int) -> dict | None:
+        async with self.pool.connection() as conn:
+            cur = await conn.execute(
+                """
+                SELECT id, usuario, mensaje, "timestamp" AS timestamp
+                FROM conversacion
+                WHERE id = %s
+                """,
+                (conversation_id,),
+            )
+            return await cur.fetchone()
+
+    async def list_conversations(self, limit: int, offset: int) -> list[dict]:
+        async with self.pool.connection() as conn:
+            cur = await conn.execute(
+                """
+                SELECT id, usuario, mensaje, "timestamp" AS timestamp
+                FROM conversacion
+                ORDER BY "timestamp" DESC, id DESC
+                LIMIT %s OFFSET %s
+                """,
+                (limit, offset),
+            )
+            return await cur.fetchall()
