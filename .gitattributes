@@ -1,0 +1,5 @@
+# Shell scripts and configs run on Linux; keep LF line endings even when edited on Windows
+*.sh text eol=lf
+*.yml text eol=lf
+Caddyfile text eol=lf
+Dockerfile text eol=lf
