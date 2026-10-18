@@ -35,6 +35,9 @@ services:
       DATABASE_URL: postgresql://build101:${POSTGRES_PASSWORD}@postgres:5432/build101
       ADMIN_TOKEN: ${ADMIN_TOKEN:-}
       GIT_SHA: ${IMAGE_TAG:-dev}
+      # Team vault (server/api/vault.py): a read-only GitHub token for build101-vault
+      VAULT_REPO: ${VAULT_REPO:-hackaton2026bnicks/build101-vault}
+      VAULT_TOKEN: ${VAULT_TOKEN:-}
     depends_on:
       postgres:
         condition: service_healthy

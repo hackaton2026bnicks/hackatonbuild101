@@ -14,7 +14,9 @@ from api.auth import Principal
 from api.broker import Broker
 from api.db import Database
 from api.hooks import CONTEXT_EVENTS, HookCall
-from api.models import Event
+from api.models import Event, states_a_task
+from api.vault import Vault
+from api.vault import block as vault_block
 
 OVERLAP_WINDOW_MINUTES = 15
 OVERLAP_TTL_MINUTES = 60
@@ -36,7 +38,11 @@ HOLDOUT_PERCENT = 10
 
 
 def in_holdout(message_id: int, session_id: str) -> bool:
-    digest = hashlib.sha256(f"{message_id}:{session_id}".encode()).digest()
+    return in_holdout_key(str(message_id), session_id)
+
+
+def in_holdout_key(key: str, session_id: str) -> bool:
+    digest = hashlib.sha256(f"{key}:{session_id}".encode()).digest()
     return int.from_bytes(digest[:4], "big") % 100 < HOLDOUT_PERCENT
 
 
@@ -51,7 +57,9 @@ def ago(moment: datetime) -> str:
     return f"{round(minutes / 1440)} d ago"
 
 
-async def handle(db: Database, broker: Broker, caller: Principal, call: HookCall) -> dict:
+async def handle(
+    db: Database, broker: Broker, caller: Principal, call: HookCall, vault: Vault | None = None
+) -> dict:
     """Process one hook call and return the JSON body Claude Code expects."""
     event = Event(
         agent="claude-code",
@@ -93,7 +101,47 @@ async def handle(db: Database, broker: Broker, caller: Principal, call: HookCall
             if brief:
                 parts.append(brief)
         parts.extend(message_text(m) for m in await deliver_messages(db, caller, call, MAX_MESSAGES_PER_HOOK))
+    knowledge = await vault_context(db, vault, caller, call)
+    if knowledge:
+        parts.append(knowledge)
     return respond(call, context="\n\n".join(parts), to_user=to_user) if parts else {}
+
+
+def vault_matches(vault: Vault, call: HookCall) -> tuple[list, str]:
+    """Vault notes for this moment of the session, and why they apply."""
+    if call.event_name == "SessionStart":
+        return vault.rules(), f"how the team works ({len(vault.notes)} notes, more arrive when they apply)"
+    if call.event_name == "UserPromptSubmit":
+        prompt = call.payload.get("prompt") or ""
+        return (vault.for_text(prompt), "for this request") if states_a_task(prompt) else ([], "")
+    if call.event_name == "PreToolUse" and call.file:
+        return vault.for_file(call.file), f"about {call.file}"
+    if call.event_name == "PostToolUseFailure" and call.payload.get("error"):
+        found = vault.for_text(call.payload["error"], types=("gotcha", "receta"))
+        return found, "about the error you just hit"
+    return [], ""
+
+
+async def vault_context(db: Database, vault: Vault | None, caller: Principal, call: HookCall) -> str | None:
+    """Team vault notes the session has not seen, at the moment they apply (docs/PLAN-EQUIPO.md, 1)."""
+    if not vault or not vault.notes:
+        return None
+    notes, why = vault_matches(vault, call)
+    if not notes:
+        return None
+    seen = await db.vault_notes_seen(caller.team, call.session_id)
+    shown = []
+    for note in notes:
+        if note.title in seen:
+            continue
+        held_out = in_holdout_key(f"vault:{note.title}", call.session_id)
+        outcome = "holdout" if held_out else "injected"
+        await db.record_vault_delivery(
+            caller.team, call.session_id, caller.user, note.title, call.event_name, outcome
+        )
+        if not held_out:
+            shown.append(note)
+    return vault_block(shown, why) if shown else None
 
 
 async def check_shared_checkout(

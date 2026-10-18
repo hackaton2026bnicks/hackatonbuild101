@@ -54,7 +54,13 @@ def test_handshake_lists_the_tools_with_usage_instructions():
     assert init["capabilities"] == {"tools": {}}
     assert mcp.handle({"jsonrpc": "2.0", "method": "notifications/initialized"}, {}) is None
     tools = mcp.handle({"jsonrpc": "2.0", "id": 1, "method": "tools/list"}, {})["result"]["tools"]
-    assert {t["name"] for t in tools} == {"share_discovery", "ask_team", "answer_team", "team_status"}
+    assert {t["name"] for t in tools} == {
+        "share_discovery",
+        "ask_team",
+        "answer_team",
+        "team_status",
+        "team_knowledge",
+    }
 
 
 def test_without_a_key_tools_fail_softly():

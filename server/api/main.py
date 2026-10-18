@@ -26,8 +26,11 @@ from api.models import (
 )
 from api.ratelimit import RateLimiter, rate_limit_middleware
 from api.scrub import scrub
+from api.vault import Vault
 
 KEEPALIVE_SECONDS = 15
+# Booting waits this long for the first read of the vault; after that it is refreshed in the background
+VAULT_FIRST_LOAD_SECONDS = 20
 
 log = logging.getLogger("api")
 
@@ -37,7 +40,17 @@ async def lifespan(app: FastAPI):
     app.state.db = Database(os.environ["DATABASE_URL"])
     app.state.broker = Broker()
     await app.state.db.open()
+    app.state.vault = Vault.from_env()
+    refresher = None
+    if app.state.vault.configured:
+        try:
+            await asyncio.wait_for(asyncio.to_thread(app.state.vault.refresh), VAULT_FIRST_LOAD_SECONDS)
+        except TimeoutError:
+            log.warning("vault not loaded at start; it will be retried in the background")
+        refresher = asyncio.create_task(app.state.vault.keep_fresh())
     yield
+    if refresher:
+        refresher.cancel()
     await app.state.db.close()
 
 
@@ -106,10 +119,33 @@ async def claude_code_hook(
         call = parse_hook(raw, x_build101_repo) if isinstance(raw, dict) else None
         if call is None:
             return {}
-        return await collab.handle(request.app.state.db, request.app.state.broker, caller, call)
+        return await collab.handle(
+            request.app.state.db, request.app.state.broker, caller, call, request.app.state.vault
+        )
     except Exception:
         log.exception("hook processing failed")
         return {}
+
+
+@app.get("/vault")
+async def vault_notes(
+    caller: Caller,
+    request: Request,
+    q: Annotated[str | None, Query(max_length=500)] = None,
+    limit: Annotated[int, Query(ge=1, le=200)] = 20,
+) -> dict:
+    """The index of the team vault: its state, and the notes that best match q (all of them without q)."""
+    vault: Vault = request.app.state.vault
+    notes = vault.search(q, limit) if q else sorted(vault.notes.values(), key=lambda n: n.title)[:limit]
+    return {"vault": vault.status(), "notes": [n.public() for n in notes]}
+
+
+@app.get("/vault/note")
+async def vault_note(caller: Caller, request: Request, title: Annotated[str, Query(max_length=300)]) -> dict:
+    note = request.app.state.vault.get(title)
+    if not note:
+        raise HTTPException(404, "No vault note with that title.")
+    return note.public(with_body=True)
 
 
 @app.post("/messages", status_code=201)
