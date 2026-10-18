@@ -21,7 +21,7 @@ import urllib.request
 DEFAULT_API = "https://54-89-124-87.sslip.io/api"
 HOOK_PATH = "/hooks/claude-code"
 # Notices the server already injects into the working sessions themselves
-SKIP_KINDS = {"overlap", "hint"}
+SKIP_KINDS = {"overlap", "hint", "workspace"}
 
 
 def fetch(api: str, key: str) -> list[dict]:

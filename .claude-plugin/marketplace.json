@@ -5,7 +5,7 @@
     {
       "name": "build101",
       "source": "./plugin",
-      "description": "Skills del equipo de build101: /insights para analizar tus sesiones de Claude y sumarlas al equipo."
+      "description": "Skills del equipo de build101: /insights para analizar tus sesiones de Claude y sumarlas al equipo, y /puente para escuchar al equipo desde una sesión aparte."
     }
   ]
 }

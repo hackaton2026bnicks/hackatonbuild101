@@ -17,6 +17,7 @@ import argparse
 import glob
 import json
 import os
+import shutil
 import subprocess
 import tempfile
 import time
@@ -55,8 +56,9 @@ def parse_card(text: str) -> dict:
 
 def make_card(r: dict, model: str = MODEL, run=subprocess.run) -> dict:
     """Pide la ficha y la devuelve con `_meta` (modelo, segundos, costo). Levanta si falla dos veces."""
+    # On Windows the CLI is claude.cmd, which also mangles multi-line arguments: the prompt goes on stdin
     cmd = [
-        "claude",
+        shutil.which("claude") or "claude",
         "-p",
         "--model",
         model,
@@ -68,10 +70,10 @@ def make_card(r: dict, model: str = MODEL, run=subprocess.run) -> dict:
         "--strict-mcp-config",
         "--tools",
         "",
-        "--system-prompt",
-        open(PROMPT).read(),
     ]
-    data = "<sesion>\n" + json.dumps(digest(r), ensure_ascii=False) + "\n</sesion>"
+    with open(PROMPT, encoding="utf-8") as fh:
+        prompt = fh.read()
+    data = prompt + "\n\n<sesion>\n" + json.dumps(digest(r), ensure_ascii=False) + "\n</sesion>"
     error = ""
     # Carpeta vacía: no levanta CLAUDE.md ni settings de ningún repo
     with tempfile.TemporaryDirectory() as workdir:
@@ -83,6 +85,7 @@ def make_card(r: dict, model: str = MODEL, run=subprocess.run) -> dict:
                     input=data,
                     capture_output=True,
                     text=True,
+                    encoding="utf-8",
                     cwd=workdir,
                     env=clean_env(),
                     timeout=TIMEOUT,

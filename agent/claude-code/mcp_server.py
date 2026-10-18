@@ -60,9 +60,11 @@ TOOLS = [
                 "body": {"type": "string", "description": "What you learned, concrete and self-contained."},
                 "kind": {
                     "type": "string",
-                    "enum": ["discovery", "alert"],
-                    "description": "alert for something urgent and short-lived (1 hour), like a broken "
-                    "shared environment. Default discovery (kept 7 days).",
+                    "enum": ["discovery", "alert", "note"],
+                    "description": "discovery (default, kept 7 days) is something learned; it also goes to "
+                    "the team vault. note (8 hours) is a status or coordination message that should not be "
+                    "kept, like 'PR #12 is deployed'. alert (1 hour) is urgent, like a broken shared "
+                    "environment.",
                 },
                 "files": FILES,
                 "hosts": HOSTS,
@@ -195,7 +197,7 @@ def call_tool(name: str, args: dict, environ: dict) -> str:
     secrets = env_secrets(environ)
     repo = repo_name(environ)
     if name == "share_discovery":
-        kind = args.get("kind") if args.get("kind") in ("discovery", "alert") else "discovery"
+        kind = args.get("kind") if args.get("kind") in ("discovery", "alert", "note") else "discovery"
         message = request(
             "POST",
             "/messages",

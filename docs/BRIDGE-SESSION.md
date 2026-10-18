@@ -1,6 +1,6 @@
 # Bridge session: a dedicated Claude that listens to the team for you
 
-Proposal from Beto, to evaluate. Status: the polling script exists ([tools/bridge_listen.py](../tools/bridge_listen.py)); nothing in the server changes.
+Proposal from Beto. Status: ready to install. It is the `/puente` skill of the team plugin (`/plugin install build101@build101`, then `/puente` in a new session); it runs [tools/bridge_listen.py](../tools/bridge_listen.py) and nothing in the server changes.
 
 ## The gap it fills
 
