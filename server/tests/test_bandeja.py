@@ -86,6 +86,13 @@ def test_prompt_starts_with_author_and_carries_the_fields():
     assert prompt.rstrip().endswith("usar Optional.")
 
 
+def test_spanish_field_names_are_accepted():
+    lesson = {"id": 1, "autor": "nico", "archivos": ["server/api/vault.py"], "texto": "x"}
+    prompt = bandeja.prompt_for(lesson)
+    assert prompt.startswith("Autor: nico\n")
+    assert "archivos: server/api/vault.py" in prompt
+
+
 def test_unknown_type_is_not_suggested():
     assert "tipo sugerido" not in bandeja.prompt_for({**LESSON, "tipo": "dato"})
 

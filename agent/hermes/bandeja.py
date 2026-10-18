@@ -72,15 +72,28 @@ class Api:
         self.call("POST", f"/api/lessons/{lesson_id}/done", result)
 
 
+# El server puede mandar los nombres en español (como los propuso Nico) o en inglés
+ALIASES = {"autor": "author", "archivos": "files"}
+
+
+def normalize(lesson: dict) -> dict:
+    out = dict(lesson)
+    for alias, field in ALIASES.items():
+        if alias in out and field not in out:
+            out[field] = out.pop(alias)
+    return out
+
+
 def prompt_for(lesson: dict) -> str:
     """El mensaje que recibe el archivista: arranca con Autor, como pide su SOUL.md."""
+    lesson = normalize(lesson)
     lines = [f"Autor: {lesson.get('author') or 'equipo'}"]
     lines.append(
         "Lección que dejó una sesión de Claude Code al cerrar. No hay a quién preguntar: "
         "si algo es ambiguo, decidí. Si no le sirve a nadie más del equipo, no la guardes y "
         "respondé solo DESCARTADA: <motivo>."
     )
-    fuente = "sesión de Claude Code"
+    fuente = lesson.get("fuente") or "sesión de Claude Code"
     if lesson.get("repo"):
         fuente += f" en {lesson['repo']}"
     lines.append(f"fuente: {fuente}")
@@ -113,6 +126,7 @@ def changed_notes(vault: Path, run=subprocess.run) -> list[str]:
 
 def file_one(lesson: dict, vault: Path, run=subprocess.run) -> dict | None:
     """Le pasa una lección al archivista y sube lo que escribió. None si falló y hay que reintentar."""
+    lesson = normalize(lesson)
     author = lesson.get("author") or "equipo"
     try:
         answer = run(

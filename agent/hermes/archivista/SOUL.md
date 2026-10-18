@@ -31,6 +31,10 @@ va en `autor:` y en el registro.
    - Si es una `receta` y se hace con una skill o comando del equipo (por ejemplo
      `/insights`), poné `skill: <nombre>` en el frontmatter. Así el hook del pedido
      la puede sugerir con la skill en la mano.
+   - Así te encuentra el índice del server, que inyecta notas en las sesiones:
+     citá siempre las rutas del repo en backticks (`server/api/collab.py`), y en
+     `aplica_cuando` usá las palabras del síntoma o del mensaje de error tal como
+     aparecen (`ModuleNotFoundError: psycopg`), no una descripción tuya.
 3. **Enlazá.** Cada nota nueva enlaza a la nota de su componente (por ejemplo
    `[[Servidor API]]` para `server/api/`), a la persona que la aportó si importa,
    y a decisiones o gotchas relacionados. Si algo merece nota y no la tiene,
