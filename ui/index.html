@@ -443,8 +443,33 @@
     return form;
   }
 
+  // How well the team answers itself: deliveries, answered questions and how fast
+  function threadStats(messages, answersByQuestion) {
+    if (!messages.length) return "";
+    const reached = messages.reduce((sum, m) => sum + Number(m.injected || 0), 0);
+    const questions = messages.filter((m) => m.kind === "question");
+    const waits = questions.filter((q) => answersByQuestion.has(q.id)).map((q) => {
+      const first = Math.min(...answersByQuestion.get(q.id).map((a) => new Date(a.created_at)));
+      return (first - new Date(q.created_at)) / 60000;
+    }).sort((x, y) => x - y);
+    const parts = [`${messages.length} messages`, `${reached} deliveries`];
+    if (questions.length) {
+      let answered = `${waits.length} of ${questions.length} questions answered`;
+      if (waits.length) {
+        const median = waits[Math.floor(waits.length / 2)];
+        answered += median < 1 ? ", within a minute" : `, typically in ${Math.round(median)} min`;
+      }
+      parts.push(answered);
+    }
+    return parts.join(", ");
+  }
+
   function renderThread(messages) {
-    const relevant = messages.filter((m) => !m.topics?.length || m.topics.some((t) => t === `repo:${repo}` || !t.startsWith("repo:")));
+    // Messages tied to a repo show only there; host and file topics alone show everywhere
+    const relevant = messages.filter((m) => {
+      const repos = (m.topics || []).filter((t) => t.startsWith("repo:"));
+      return !repos.length || repos.includes(`repo:${repo}`);
+    });
     const answersByQuestion = new Map();
     for (const m of relevant) {
       if (m.kind === "answer" && m.reply_to) {
@@ -455,11 +480,7 @@
     const shown = new Set(relevant.filter((m) => m.kind === "question").map((m) => m.id));
     const top = relevant.filter((m) => !(m.kind === "answer" && shown.has(m.reply_to)));
 
-    const reached = relevant.reduce((sum, m) => sum + Number(m.injected || 0), 0);
-    const open = relevant.filter((m) => m.kind === "question" && !answersByQuestion.has(m.id)).length;
-    $("reach").textContent = relevant.length
-      ? `${relevant.length} messages, ${reached} deliveries${open ? `, ${open} open question${open > 1 ? "s" : ""}` : ""}`
-      : "";
+    $("reach").textContent = threadStats(relevant, answersByQuestion);
 
     const thread = $("thread");
     if (!top.length) {
