@@ -42,6 +42,7 @@ PLAIN_FIELDS = (
     "source",
     "stop_hook_active",
     "trigger",
+    "model",
 )
 
 SCRUBBED_FIELDS = ("prompt", "error")
@@ -153,6 +154,8 @@ def model_from_transcript(path: str) -> Optional[str]:  # noqa: UP007 (runs on P
 
 
 def with_model(raw: dict) -> dict:
+    if isinstance(raw.get("model"), dict):  # some clients send {"id": ..., "display_name": ...}
+        raw = {**raw, "model": raw["model"].get("id")}
     if raw.get("hook_event_name") in MODEL_HOOKS and not raw.get("model") and raw.get("transcript_path"):
         model = model_from_transcript(str(raw["transcript_path"]))
         if model:

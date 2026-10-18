@@ -210,3 +210,6 @@ def test_the_model_comes_from_the_last_answer_in_the_transcript(tmp_path):
     assert forward.with_model(raw)["model"] == "claude-opus-5-5"
     assert "model" not in forward.with_model({**raw, "hook_event_name": "PreToolUse"})
     assert forward.with_model({**raw, "model": "claude-haiku-5-5"})["model"] == "claude-haiku-5-5"
+    # What is actually sent: the whitelist must keep it
+    assert forward.sanitize(forward.with_model(raw), {})["model"] == "claude-opus-5-5"
+    assert forward.with_model({**raw, "model": {"id": "claude-fable-5-1"}})["model"] == "claude-fable-5-1"
