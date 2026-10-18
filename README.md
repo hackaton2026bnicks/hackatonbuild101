@@ -12,6 +12,7 @@ ui/         team dashboard (static, served by Caddy)
 infra/      docker compose, Caddy, AWS bootstrap and deploy scripts
 tools/      helper scripts, such as a fake agent session for testing
 docs/       spec
+agent/hermes/  Hermes agents that keep the team's Obsidian vault (separate repo build101-vault)
 ```
 
 Coming next: `agent/` (local hook receiver, scrubber, canonicalizer, trigger index) and `adapters/`.
