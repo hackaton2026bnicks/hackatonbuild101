@@ -64,3 +64,16 @@ def test_random_looking_tokens_are_redacted_but_hashes_are_kept():
     cleaned = scrub(f"export X={secret} && git checkout {sha}")
     assert secret not in cleaned
     assert sha in cleaned
+
+
+def test_paths_are_relative_to_the_project_even_after_cd():
+    raw = {
+        "hook_event_name": "PreToolUse",
+        "session_id": "s1",
+        "cwd": "/home/ana/payments/server",
+        "tool_name": "Edit",
+        "tool_input": {"file_path": "/home/ana/payments/server/api/db.py"},
+    }
+    sent = forward.sanitize(raw, {"CLAUDE_PROJECT_DIR": "/home/ana/payments"})
+    assert sent["cwd"] == "/home/ana/payments"
+    assert forward.sanitize(raw, {})["cwd"] == "/home/ana/payments/server"

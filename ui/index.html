@@ -128,7 +128,7 @@
     .chip { padding: 0 6px; border-radius: 4px; background: var(--soft); border: 1px solid var(--line); }
     .msg.alert .kind, .msg.overlap .kind, .msg.conflict .kind { color: var(--amber); }
     .msg.overlap, .msg.conflict { background: var(--amber-bg); border-color: var(--amber-line); }
-    .msg.question .kind, .msg.hint .kind { color: var(--accent); }
+    .msg.question .kind, .msg.hint .kind, .msg.nudge .kind { color: var(--accent); }
     .answers { list-style: none; margin: 8px 0 0; padding: 0 0 0 14px; border-left: 2px solid var(--line); display: grid; gap: 8px; }
     .answers .msg { background: var(--soft); }
     .reply { margin-top: 8px; display: grid; gap: 6px; }
@@ -248,7 +248,7 @@
     note: ["A short note for the team", "Reaches every session on the team.", "Post note"],
     alert: ["Something urgent, like a broken shared environment", "Delivered first, lasts one hour.", "Send alert"],
   };
-  const KIND_LABEL = { discovery: "discovery", question: "question", answer: "answer", note: "note", alert: "alert", overlap: "overlap", conflict: "overlap", hint: "pointed to who knows" };
+  const KIND_LABEL = { discovery: "discovery", question: "question", answer: "answer", note: "note", alert: "alert", overlap: "overlap", conflict: "overlap", hint: "pointed to who knows", nudge: "asked to share a fix" };
 
   let apiKey = null, me = null, repo = null, feedAbort = null, refreshTimer = null;
   const people = new Map();

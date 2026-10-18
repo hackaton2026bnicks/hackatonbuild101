@@ -23,7 +23,16 @@ DEFAULT_URL = "https://54-89-124-87.sslip.io/api/hooks/claude-code"
 TIMEOUT_SECONDS = 4
 TEXT_LIMIT = 2000
 
-PLAIN_FIELDS = ("hook_event_name", "session_id", "cwd", "tool_name", "agent_id", "agent_type", "source")
+PLAIN_FIELDS = (
+    "hook_event_name",
+    "session_id",
+    "cwd",
+    "tool_name",
+    "agent_id",
+    "agent_type",
+    "source",
+    "stop_hook_active",
+)
 SCRUBBED_FIELDS = ("prompt", "error")
 PATH_INPUTS = ("file_path", "notebook_path")
 SCRUBBED_INPUTS = ("command", "url")
@@ -49,6 +58,9 @@ def clean(text: str, secrets: list[str]) -> str:
 def sanitize(raw: dict, environ: dict) -> dict:
     secrets = env_secrets(environ)
     out = {field: str(raw[field])[:TEXT_LIMIT] for field in PLAIN_FIELDS if raw.get(field) is not None}
+    # The hook's cwd follows the agent's `cd`; the project root keeps the repo name and paths stable
+    if environ.get("CLAUDE_PROJECT_DIR"):
+        out["cwd"] = environ["CLAUDE_PROJECT_DIR"][:TEXT_LIMIT]
     for field in SCRUBBED_FIELDS:
         if isinstance(raw.get(field), str):
             out[field] = clean(raw[field], secrets)
