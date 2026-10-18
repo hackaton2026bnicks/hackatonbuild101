@@ -175,6 +175,7 @@
     }
     .nick:hover { text-decoration-color: currentColor; }
     .owner { color: var(--muted); font-size: 0.88rem; }
+    .tag.model { color: var(--ink); font-weight: 600; }
     .owner b { color: var(--who); font-weight: 700; }
     .pill {
       margin-left: auto; display: inline-flex; align-items: center; gap: 6px; padding: 1px 10px 1px 8px;
@@ -1278,6 +1279,14 @@
     return `${svg}<rect class="now" x="${w - 2}" y="${h - 13}" width="2" height="8"/></svg>`;
   }
 
+  // "claude-opus-5-5" -> "Opus 5.5", "claude-sonnet-4-5-20250929" -> "Sonnet 4.5"; others as they come
+  function modelName(id) {
+    if (!id) return "";
+    const m = String(id).match(/claude-([a-z]+)-(\d+)(?:-(\d{1,2}))?(?:-\d{8})?/);
+    if (!m) return clip(String(id), 24);
+    return `${m[1][0].toUpperCase()}${m[1].slice(1)} ${m[2]}${m[3] ? `.${m[3]}` : ""}`;
+  }
+
   function makeCard(s) {
     const root = el("article", null, "agent enter");
     root.dataset.id = s.session_id;
@@ -1295,10 +1304,12 @@
     nick.addEventListener("click", () => pick(picked === s.session_id ? null : s.session_id));
     const owner = el("span", null, "owner");
     const mineTag = el("span", "yours", "tag");
+    const modelTag = el("span", null, "tag model");
+    modelTag.hidden = true;
     const pill = el("span", null, "pill");
     const pillText = el("span");
     pill.append(el("i"), pillText);
-    head.append(nick, owner, mineTag, pill);
+    head.append(nick, owner, mineTag, modelTag, pill);
     const bubble = el("div", null, "bubble");
     const say = el("p", null, "say");
     const sub = el("p", null, "sub mono");
@@ -1325,7 +1336,7 @@
     root.append(wrap, main, foot);
     // A timer, not animationend: a waiting card's ring animation replaces the pop, so that event never comes
     setTimeout(() => root.classList.remove("enter"), 700);
-    const card = { root, wrap, bot, nick, owner, mineTag, pillText, say, sub, missionText, mission, heart, mixbar, mixline, stats, state: null, sayText: null };
+    const card = { root, wrap, bot, nick, owner, mineTag, modelTag, pillText, say, sub, missionText, mission, heart, mixbar, mixline, stats, state: null, sayText: null };
     cards.set(s.session_id, card);
     return card;
   }
@@ -1342,6 +1353,10 @@
     card.nick.textContent = a.nick;
     card.owner.replaceChildren(document.createTextNode("of "), el("b", a.s.user_name));
     card.mineTag.hidden = !a.mine;
+    const model = modelName(a.s.model || (sessionMeta.get(a.s.session_id) || {}).model);
+    card.modelTag.hidden = !model;
+    card.modelTag.textContent = model;
+    card.modelTag.title = a.s.model || "";
     card.pillText.textContent = a.state === "wait" && !a.mine ? `Waiting on ${a.s.user_name}` : PILL[a.state];
     if (card.sayText !== a.say) {
       card.sayText = a.say;

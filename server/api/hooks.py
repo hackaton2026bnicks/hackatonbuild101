@@ -151,6 +151,11 @@ def parse(raw: dict, repo_header: str | None = None) -> HookCall | None:
         payload["prompt"] = scrub(raw["prompt"], TEXT_LIMIT)
     if event_name == "SessionStart" and raw.get("source"):
         payload["source"] = str(raw["source"])[:32]
+    model = raw.get("model")
+    if isinstance(model, dict):  # some clients send {"id": ..., "display_name": ...}
+        model = model.get("id")
+    if isinstance(model, str) and model.strip():
+        payload["model"] = model.strip()[:64]
     if event_name == "PreCompact" and raw.get("trigger"):
         payload["trigger"] = str(raw["trigger"])[:32]
     for key in ("agent_id", "agent_type"):
