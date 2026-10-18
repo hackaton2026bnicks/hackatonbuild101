@@ -465,7 +465,11 @@
   }
 
   function renderThread(messages) {
-    const relevant = messages.filter((m) => !m.topics?.length || m.topics.some((t) => t === `repo:${repo}` || !t.startsWith("repo:")));
+    // Messages tied to a repo show only there; host and file topics alone show everywhere
+    const relevant = messages.filter((m) => {
+      const repos = (m.topics || []).filter((t) => t.startsWith("repo:"));
+      return !repos.length || repos.includes(`repo:${repo}`);
+    });
     const answersByQuestion = new Map();
     for (const m of relevant) {
       if (m.kind === "answer" && m.reply_to) {
