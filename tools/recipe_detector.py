@@ -114,8 +114,11 @@ def recipe(group: list[dict], facts: dict, persona: str) -> dict:
         )
     ]
     keywords = collections.Counter(w for i in intents for w in words(i))
+    # El autor de la nota lo pone el server desde la key; acá el nombre es solo para leer, y sin
+    # uno real (en Windows USER no existe y llega "me") la frase va sin nombre
+    who = f"{persona} repite esto" if persona and persona != "me" else "Esto se repite"
     text = [
-        f"{persona} repite esto en {len(group)} sesiones ({hours:.1f} h activas, trabajo "
+        f"{who} en {len(group)} sesiones ({hours:.1f} h activas, trabajo "
         f"{most_common(c.get('trabajo') for c in group)}): " + "; ".join(sorted(set(intents))) + ".",
         f"La que mejor salió ({(top_fact.get('start') or '')[:10]}, {top.get('resultado')}, "
         f"F {friction(top_fact):.0f}) usó: "
@@ -222,12 +225,17 @@ def run(
     return done
 
 
+def default_persona(environ: dict) -> str:
+    for name in ("BUILD101_INSIGHTS_USER", "B101_NAME", "USER", "USERNAME"):
+        if environ.get(name):
+            return environ[name]
+    return ""
+
+
 def main(argv: list[str] | None = None) -> int:
     ap = argparse.ArgumentParser(description=__doc__.split("\n")[0])
     ap.add_argument("--dir", default=INSIGHTS_DIR)
-    ap.add_argument(
-        "--persona", default=os.environ.get("BUILD101_INSIGHTS_USER") or os.environ.get("USER", "me")
-    )
+    ap.add_argument("--persona", default=default_persona(os.environ))
     ap.add_argument(
         "--min", type=int, default=MIN_SESSIONS, help="sesiones para que algo cuente como repetido"
     )

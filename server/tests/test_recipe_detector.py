@@ -67,6 +67,11 @@ def test_recipe_names_the_best_session_and_its_skill():
     assert "noticia" in lesson["aplica_cuando"] and "semanal" in lesson["aplica_cuando"]
 
 
+def test_without_a_real_name_the_text_has_no_name():
+    group = [c for c in WEEKLY if c["session_id"] != "s4"]
+    assert detector.recipe(group, FACTS, "me")["texto"].startswith("Esto se repite en 3 sesiones")
+
+
 def test_sent_group_is_not_sent_again_when_it_grows(tmp_path, monkeypatch):
     write(tmp_path, WEEKLY, FACTS.values())
     sent = []
