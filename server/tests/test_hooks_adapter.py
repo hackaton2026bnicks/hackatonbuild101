@@ -1,4 +1,4 @@
-from api.hooks import hosts_in, parse, repo_relative
+from api.hooks import command_hosts, hosts_in, parse, repo_relative
 from api.scrub import scrub
 
 
@@ -15,6 +15,15 @@ def test_files_outside_the_repo_have_no_relative_path():
 def test_hosts_are_extracted_from_commands():
     command = "curl -X POST https://Sandbox.BankX.com/oauth/token && curl http://localhost:8000/x"
     assert hosts_in(command) == ["localhost", "sandbox.bankx.com"]
+
+
+def test_urls_in_heredocs_and_messages_are_not_calls():
+    pr = "gh pr create --body \"$(cat <<'EOF'\nfix\n\n[Claude Code](https://claude.com/claude-code)\nEOF\n)\""
+    commit = "git commit -m 'see https://docs.example.com/x' && curl https://api.bankx.com/v1"
+    assert command_hosts(pr) == []
+    assert command_hosts(commit) == ["api.bankx.com"]
+    script = "python - <<EOF\nprint('https://docs.example.com')\nEOF\ncurl http://sandbox.bankx.com"
+    assert command_hosts(script) == ["sandbox.bankx.com"]
 
 
 def test_scrub_removes_common_secrets():
