@@ -15,7 +15,7 @@ MAX_FAILURES intentos se descarta con el motivo. Solo biblioteca estándar, Pyth
 Uso:       python3 agent/hermes/bandeja.py            (escucha, una vuelta cada INTERVAL segundos)
            python3 agent/hermes/bandeja.py --once     (una vuelta y sale)
 Entorno:   BUILD101_KEY (obligatoria), BUILD101_URL, VAULT (default ../build101-vault),
-           BANDEJA_INTERVAL (default 120)
+           BANDEJA_INTERVAL (default 120), BANDEJA_ARCHIVISTA=claude (Claude Code en vez de Hermes)
 """
 
 from __future__ import annotations
@@ -23,6 +23,7 @@ from __future__ import annotations
 import argparse
 import json
 import os
+import shutil
 import subprocess
 import sys
 import time
@@ -145,17 +146,30 @@ def git_changed(vault: Path, folder: str, run=subprocess.run) -> bool:
     return git(vault, "diff", "--cached", "--quiet", "--", folder, run=run).returncode != 0
 
 
+# Lo que el archivista necesita de Claude Code: leer y escribir notas, y `date +%F` para el registro
+CLAUDE_TOOLS = "Read,Write,Edit,Grep,Glob,Bash(date:*)"
+
+
+def archivist_call(prompt: str, vault: Path, environ=os.environ) -> tuple[list[str], dict]:
+    """Hermes por defecto. Con BANDEJA_ARCHIVISTA=claude, Claude Code parado en la bóveda con el mismo
+    SOUL.md: así la cola corre en cualquier máquina con `claude` (Windows también), no solo con Hermes."""
+    if environ.get("BANDEJA_ARCHIVISTA") != "claude":
+        return ["hermes", "-p", "archivista", "-z", prompt], {"text": True}
+    soul = (HERE / "archivista" / "SOUL.md").read_text(encoding="utf-8")
+    # Todo va por stdin: un argumento de varias líneas no sobrevive a claude.cmd en Windows
+    message = f"{soul}\n\n---\n\n{prompt}"
+    claude = shutil.which("claude") or "claude"
+    command = [claude, "-p", "--allowedTools", CLAUDE_TOOLS, "--permission-mode", "acceptEdits"]
+    return command, {"input": message, "cwd": str(vault), "text": True, "encoding": "utf-8"}
+
+
 def file_one(lesson: dict, vault: Path, run=subprocess.run) -> dict | None:
     """Le pasa una lección al archivista y sube lo que escribió. None si falló y hay que reintentar."""
     lesson = normalize(lesson)
     author = lesson.get("author") or "equipo"
     try:
-        answer = run(
-            ["hermes", "-p", "archivista", "-z", prompt_for(lesson)],
-            capture_output=True,
-            text=True,
-            timeout=HERMES_TIMEOUT,
-        )
+        command, options = archivist_call(prompt_for(lesson), vault)
+        answer = run(command, capture_output=True, timeout=HERMES_TIMEOUT, **options)
     except (OSError, subprocess.TimeoutExpired):
         return None
     if answer.returncode != 0:
