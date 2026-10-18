@@ -99,9 +99,10 @@ def test_unknown_events_are_ignored():
 
 def test_files_in_a_claude_code_worktree_are_the_repo_files():
     in_worktree = repo_relative(
-        "/Users/beto/hackatonbuild101/.claude/worktrees/upbeat-feistel/agent/forward.py", "/Users/beto/hackatonbuild101"
+        "/Users/beto/hackatonbuild101/.claude/worktrees/upbeat-feistel/agent/forward.py",
+        "/Users/beto/hackatonbuild101",
     )
     assert in_worktree == "agent/forward.py"
-    assert repo_relative("/Users/beto/hackatonbuild101/.claude/settings.json", "/Users/beto/hackatonbuild101") == (
-        ".claude/settings.json"
-    )
+    assert repo_relative(
+        "/Users/beto/hackatonbuild101/.claude/settings.json", "/Users/beto/hackatonbuild101"
+    ) == (".claude/settings.json")
