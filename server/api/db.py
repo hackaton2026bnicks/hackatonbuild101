@@ -463,6 +463,91 @@ class Database:
             )
             return await cur.fetchone()
 
+    async def save_insights(self, team: str, uploaded_by: str, result: dict) -> dict:
+        """Store one person's /insights result; the same period uploaded again replaces it."""
+        async with self.pool.connection() as conn:
+            cur = await conn.execute(
+                """
+                INSERT INTO insights_results (team, persona, hasta, desde, uploaded_by, data)
+                VALUES (%s, %s, %s, %s, %s, %s)
+                ON CONFLICT (team, persona, hasta) DO UPDATE SET
+                    desde = EXCLUDED.desde, uploaded_by = EXCLUDED.uploaded_by, data = EXCLUDED.data,
+                    uploaded_at = now()
+                RETURNING persona, desde, hasta, uploaded_by, uploaded_at
+                """,
+                (
+                    team,
+                    result["persona"],
+                    result["periodo"]["hasta"],
+                    result["periodo"].get("desde"),
+                    uploaded_by,
+                    Jsonb(result),
+                ),
+            )
+            return await cur.fetchone()
+
+    async def latest_insights(self, team: str) -> list[dict]:
+        """Each person's newest result, with how many periods they uploaded so far."""
+        async with self.pool.connection() as conn:
+            cur = await conn.execute(
+                """
+                SELECT DISTINCT ON (persona) persona, desde, hasta, uploaded_by, uploaded_at, data,
+                       count(*) OVER (PARTITION BY persona) AS periods
+                FROM insights_results WHERE team = %s
+                ORDER BY persona, hasta DESC
+                """,
+                (team,),
+            )
+            return await cur.fetchall()
+
+    async def knowledge_stats(self, team: str, minutes: int) -> dict:
+        """Does the team learn: how many sessions the vault reached, with what, and what went into it."""
+        async with self.pool.connection() as conn:
+            cur = await conn.execute(
+                """
+                SELECT
+                  (SELECT count(*) FROM sessions s
+                   WHERE s.team = %(team)s AND s.parent_session_id IS NULL AND s.event_count >= 5
+                     AND s.last_event_at > now() - make_interval(mins => %(minutes)s)) AS sessions,
+                  count(DISTINCT session_id) FILTER (WHERE outcome = 'injected') AS reached,
+                  count(DISTINCT session_id) FILTER (WHERE outcome = 'holdout') AS held_out,
+                  count(*) FILTER (WHERE outcome = 'injected') AS injected
+                FROM vault_deliveries
+                WHERE team = %(team)s AND delivered_at > now() - make_interval(mins => %(minutes)s)
+                """,
+                {"team": team, "minutes": minutes},
+            )
+            stats = dict(await cur.fetchone())
+            cur = await conn.execute(
+                """
+                SELECT note, count(*) AS sessions, array_agg(DISTINCT user_name) AS users,
+                       array_agg(DISTINCT hook) AS hooks
+                FROM vault_deliveries
+                WHERE team = %s AND outcome = 'injected' AND delivered_at > now() - make_interval(mins => %s)
+                GROUP BY note ORDER BY count(*) DESC, note LIMIT 5
+                """,
+                (team, minutes),
+            )
+            stats["top_notes"] = await cur.fetchall()
+            cur = await conn.execute(
+                """
+                SELECT status, count(*) AS n FROM lessons
+                WHERE team = %s AND created_at > now() - make_interval(mins => %s)
+                GROUP BY status
+                """,
+                (team, minutes),
+            )
+            stats["lessons"] = {row["status"]: row["n"] for row in await cur.fetchall()}
+            cur = await conn.execute(
+                f"""
+                SELECT {LESSON_COLUMNS} FROM lessons
+                WHERE team = %s AND status = 'filed' ORDER BY done_at DESC LIMIT 5
+                """,
+                (team,),
+            )
+            stats["filed"] = await cur.fetchall()
+            return stats
+
     async def session_brief(self, team: str, session_id: str) -> dict:
         """What a subagent should know about its parent session."""
         async with self.pool.connection() as conn:

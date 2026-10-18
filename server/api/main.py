@@ -21,6 +21,7 @@ from api.models import (
     Conversation,
     ConversationCreate,
     EventBatch,
+    InsightsResult,
     KeyRequest,
     LessonCreate,
     LessonDone,
@@ -235,6 +236,57 @@ async def lesson_done(lesson_id: int, body: LessonDone, caller: Caller, request:
     if not lesson:
         raise HTTPException(404, "No lesson with that id.")
     return lesson
+
+
+@app.post("/insights", status_code=201)
+async def upload_insights(body: InsightsResult, caller: Caller, request: Request) -> dict:
+    """A person's /insights result (resultado.json), uploaded after they reviewed it."""
+    result = body.model_dump(mode="json")
+    return await request.app.state.db.save_insights(caller.team, caller.user, result)
+
+
+def shared_opportunities(results: list[dict]) -> list[dict]:
+    """Opportunities two people or more found on the same topic: the ones worth building once for all."""
+    by_topic: dict[str, dict] = {}
+    for row in results:
+        for item in row["data"].get("oportunidades") or []:
+            topic = str(item.get("tema") or "").strip()
+            if not topic:
+                continue
+            entry = by_topic.setdefault(
+                topic, {"tema": topic, "personas": [], "tipos": [], "sesiones": 0, "horas": 0.0, "O": 0.0,
+                        "que": []},
+            )  # fmt: skip
+            if row["persona"] not in entry["personas"]:
+                entry["personas"].append(row["persona"])
+            if item.get("tipo") and item["tipo"] not in entry["tipos"]:
+                entry["tipos"].append(item["tipo"])
+            for field in ("sesiones", "horas", "O"):
+                try:
+                    entry[field] += float(item.get(field) or 0)
+                except (TypeError, ValueError):
+                    pass
+            entry["que"].append(
+                {"persona": row["persona"], "que": item.get("que"), "trabajo": item.get("trabajo")}
+            )
+    shared = [e for e in by_topic.values() if len(e["personas"]) >= 2]
+    return sorted(shared, key=lambda e: (len(e["personas"]), e["O"]), reverse=True)
+
+
+@app.get("/insights")
+async def insights(caller: Caller, request: Request) -> dict:
+    """Each person's newest /insights result, and the opportunities they share."""
+    results = await request.app.state.db.latest_insights(caller.team)
+    return {"results": results, "shared": shared_opportunities(results)}
+
+
+@app.get("/knowledge")
+async def knowledge(
+    caller: Caller, request: Request, minutes: Annotated[int, Query(ge=60, le=30 * 24 * 60)] = 7 * 24 * 60
+) -> dict:
+    """Does the team learn: what the vault holds, how many sessions it reached and what went into it."""
+    stats = await request.app.state.db.knowledge_stats(caller.team, minutes)
+    return {"vault": request.app.state.vault.status(), **stats}
 
 
 @app.get("/repos")

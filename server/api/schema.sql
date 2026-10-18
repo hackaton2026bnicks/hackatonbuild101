@@ -139,3 +139,16 @@ CREATE TABLE IF NOT EXISTS lessons (
 ALTER TABLE lessons ADD COLUMN IF NOT EXISTS skill text;
 
 CREATE INDEX IF NOT EXISTS lessons_queue ON lessons (team, status, id);
+
+-- Results of /insights (tools/insights_export.py), one per person and period. Uploading the same period
+-- again replaces it, so a person can correct what they shared.
+CREATE TABLE IF NOT EXISTS insights_results (
+    team         text NOT NULL,
+    persona      text NOT NULL,
+    hasta        date NOT NULL,
+    desde        date,
+    uploaded_by  text NOT NULL,
+    data         jsonb NOT NULL,
+    uploaded_at  timestamptz NOT NULL DEFAULT now(),
+    PRIMARY KEY (team, persona, hasta)
+);

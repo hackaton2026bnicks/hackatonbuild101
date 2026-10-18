@@ -3,7 +3,7 @@
 import html
 import json
 import re
-from datetime import datetime
+from datetime import date, datetime
 from typing import Annotated, Any, Literal
 
 from pydantic import BaseModel, Field, field_validator, model_validator
@@ -173,4 +173,29 @@ class LessonDone(BaseModel):
     def one_outcome(self) -> "LessonDone":
         if bool(self.nota) == bool(self.descartada):
             raise ValueError("send either nota or descartada")
+        return self
+
+
+MAX_INSIGHTS_BYTES = 256 * 1024
+
+
+class InsightsPeriod(BaseModel):
+    desde: date | None = None
+    hasta: date
+
+
+class InsightsResult(BaseModel, extra="allow"):
+    """A resultado.json from /insights (tools/insights_export.py). Only what the dashboard relies on is
+    checked; the rest is kept as it came."""
+
+    persona: str = Field(pattern=r"^[a-z0-9][a-z0-9_-]{0,30}$")
+    periodo: InsightsPeriod
+    tarjeta: dict[str, Any] = Field(default_factory=dict)
+    oportunidades: list[dict[str, Any]] = Field(default_factory=list, max_length=10)
+    estrellas: list[dict[str, Any]] = Field(default_factory=list, max_length=5)
+
+    @model_validator(mode="after")
+    def fits(self) -> "InsightsResult":
+        if len(self.model_dump_json()) > MAX_INSIGHTS_BYTES:
+            raise ValueError(f"resultado is larger than {MAX_INSIGHTS_BYTES} bytes")
         return self
