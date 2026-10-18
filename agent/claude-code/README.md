@@ -28,6 +28,7 @@ Restart Claude Code in this repo and approve the `build101` server when asked. I
 Every hook goes through [forward.py](forward.py), which runs on your machine and sends only:
 
 - event name, session id, working directory, tool name, subagent id and type
+- the name of the skill or subagent type the agent calls (never its arguments or prompt), and whether a compaction was manual or automatic
 - file paths (the server turns them into repo-relative paths)
 - commands, URLs, prompts and error messages, scrubbed and cut to 2,000 characters
 
@@ -72,6 +73,10 @@ Without `BUILD101_KEY` the hooks do nothing and send nothing. Use the ignored `s
 5. Start Claude Code in that project. Your session appears on the dashboard within a few seconds.
 
 Sessions are grouped by repo using the name of the folder Claude Code starts in, so teammates should open the same repo folder name. To set it explicitly, also set `BUILD101_REPO=acme/payments`.
+
+## Measure your own sessions (optional)
+
+[session_end.py](session_end.py) is a separate `SessionEnd` hook that sends nothing to the server. When a session closes it starts a background process and returns at once; that process appends the session's facts and its work card (a small model through `claude -p`) to `~/.claude/session-insights/`, and `tools/weekly_report.py` turns them into a weekly summary. Install and cost are in [DIK-INSIGHTS.md](../../docs/DIK-INSIGHTS.md#instalar-la-parte-hacia-adelante).
 
 ## Share a discovery
 

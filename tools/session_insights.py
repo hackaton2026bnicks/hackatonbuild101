@@ -293,7 +293,7 @@ def adoption(rs):
     }
 
 
-def stars(rs, cards):
+def stars(rs, cards, limit=15):
     """Sesiones ejemplares: más apalancamiento y capital, menos fricción en su trabajo, y resueltas."""
     hum = [r for r in rs if r["_m"]["humana"]]
     groups = collections.defaultdict(list)
@@ -336,7 +336,7 @@ def stars(rs, cards):
                 }
             )
     out.sort(key=lambda x: -x["puntaje"])
-    return out[:15]
+    return out[:limit] if limit else out
 
 
 # --- Puntaje de oportunidad ----------------------------------------------------------------------
@@ -426,7 +426,8 @@ def card_aggregates(rs, cards):
 def load(patterns: list[str]) -> list[dict]:
     rows = []
     for pat in patterns:
-        for p in sorted(glob.glob(os.path.expanduser(pat))):
+        # Del archivo más viejo al más nuevo: la medición más reciente de una sesión manda
+        for p in sorted(glob.glob(os.path.expanduser(pat)), key=os.path.getmtime):
             with open(p) as fh:
                 rows += [json.loads(line) for line in fh if line.strip()]
     return rows
@@ -441,7 +442,7 @@ def main():
     ap.add_argument("--out", default="insights.json")
     a = ap.parse_args()
 
-    rows = load(a.facts)
+    rows = list({r["session_id"]: r for r in load(a.facts)}.values())  # una sesion retomada: la ultima
     if a.since:
         rows = [r for r in rows if r["start"][:10] >= a.since]
     cards = {c["session_id"]: c for c in load(a.cards)} if a.cards else {}
