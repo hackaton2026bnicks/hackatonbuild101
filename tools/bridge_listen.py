@@ -19,6 +19,7 @@ import urllib.error
 import urllib.request
 
 DEFAULT_API = "https://54-89-124-87.sslip.io/api"
+HOOK_PATH = "/hooks/claude-code"
 # Notices the server already injects into the working sessions themselves
 SKIP_KINDS = {"overlap", "hint"}
 
@@ -43,11 +44,15 @@ def main() -> int:
     parser.add_argument("--interval", type=int, default=30)
     args = parser.parse_args()
 
+    # A Windows console is cp1252: one "→" in a message would raise and that message would be lost
+    sys.stdout.reconfigure(encoding="utf-8")
     key = os.environ.get("BUILD101_KEY")
     if not key:
         print("BRIDGE_ERROR BUILD101_KEY is not set", flush=True)
         return 1
     api = os.environ.get("BUILD101_URL", DEFAULT_API).rstrip("/")
+    # The hooks' BUILD101_URL is the hook endpoint; the API base is what comes before it
+    api = api[: -len(HOOK_PATH)] if api.endswith(HOOK_PATH) else api
     me, repo = os.environ.get("BUILD101_USER", ""), os.environ.get("BUILD101_REPO", "")
 
     last, failing = args.since, False

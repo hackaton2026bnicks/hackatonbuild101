@@ -255,6 +255,13 @@
     .i-tool { --ib: var(--k-run); } .i-rule { --ib: var(--k-build); } .i-hook { --ib: var(--k-error); }
     .i-copy { --ib: var(--k-wait); } .i-build { --ib: var(--k-delegate); } .i-notify { --ib: var(--k-talk); }
     .fine { margin: 0; font-size: 0.78rem; }
+    .learn { display: grid; gap: 14px; }
+    .learn-lists { display: grid; grid-template-columns: repeat(auto-fit, minmax(min(100%, 320px), 1fr)); gap: 10px; }
+    .learn-lists > div { background: var(--surface); border: 1px solid var(--line); border-radius: 10px; padding: 10px 14px 12px; }
+    .learn-lists h3 { margin: 0 0 6px; font-size: 0.74rem; letter-spacing: 0.05em; text-transform: uppercase; color: var(--muted); }
+    .learn-list { list-style: none; margin: 0; padding: 0; display: grid; gap: 6px; font-size: 0.88rem; }
+    .learn-list li { display: grid; gap: 1px; overflow-wrap: anywhere; }
+    .learn-list li span { font-size: 0.8rem; color: var(--muted); }
 
     /* Play-by-play */
     .feed-tools { display: flex; gap: 6px; align-items: center; flex-wrap: wrap; margin-left: auto; }
@@ -511,6 +518,60 @@
         </div>
         <ol class="insights" id="insights"></ol>
         <p class="fine muted">Not measured yet, because the hooks don't send it: tokens and cost (C), compactions, which skill or subagent ran, and whether the work got done (R, needs the session's work card).</p>
+      </div>
+    </section>
+
+    <section aria-labelledby="h-learn">
+      <div class="section-head">
+        <h2 id="h-learn">Does the team learn?</h2>
+        <p class="muted" id="learn-note">The team vault: what reached each session, and what sessions left in it.</p>
+      </div>
+      <div class="learn">
+        <div class="tiles">
+          <div class="tile"><b id="l-notes">–</b><span>notes in the vault</span></div>
+          <div class="tile"><b id="l-reach">–</b><span>of sessions got a note</span></div>
+          <div class="tile"><b id="l-injected">–</b><span>notes handed out</span></div>
+          <div class="tile"><b id="l-filed">–</b><span>lessons filed</span></div>
+          <div class="tile"><b id="l-pending">–</b><span>waiting for the archivista</span></div>
+        </div>
+        <div class="learn-lists">
+          <div>
+            <h3>Notes that reached sessions</h3>
+            <ol class="learn-list" id="l-top"></ol>
+          </div>
+          <div>
+            <h3>Lately into the vault</h3>
+            <ol class="learn-list" id="l-recent"></ol>
+          </div>
+        </div>
+        <p class="fine muted" id="l-holdout"></p>
+      </div>
+    </section>
+
+    <section aria-labelledby="h-opps">
+      <div class="section-head">
+        <h2 id="h-opps">What to build once for everyone</h2>
+        <p class="muted">From each person's /insights: what two people or more found, and the sessions worth copying.</p>
+      </div>
+      <div class="score">
+        <ol class="insights" id="opps"></ol>
+        <div class="score-table">
+          <table>
+            <thead>
+              <tr>
+                <th scope="col">Person</th>
+                <th scope="col" title="Period of the last /insights upload">Period</th>
+                <th scope="col">Sessions</th>
+                <th scope="col" title="H: active hours">Active</th>
+                <th scope="col" title="K, capitalization">Reusable <abbr>K</abbr></th>
+                <th scope="col" title="F, friction every 100 actions">Friction <abbr>F</abbr></th>
+                <th scope="col">Opportunities</th>
+                <th scope="col" title="How many periods this person uploaded">Uploads</th>
+              </tr>
+            </thead>
+            <tbody id="opps-people"></tbody>
+          </table>
+        </div>
       </div>
     </section>
 
@@ -1729,6 +1790,114 @@
     }));
   }
 
+  // ---------- Does the team learn, and what to build once ----------
+  // The four kinds of opportunity that end in something to build (DIK-INSIGHTS), then the rest
+  const BUILD_KINDS = { tool: "i-tool", skill: "i-build", adoptar: "i-copy", hook: "i-hook" };
+  const OTHER_KINDS = { regla: "i-rule", subagente: "i-build", mcp: "i-tool", app: "i-notify" };
+
+  async function loadLearning() {
+    if (!apiKey) return;
+    const [knowledge, insights] = await Promise.all([
+      api(`/knowledge?minutes=${Math.max(scorePeriod, 60)}`).catch(() => null),
+      api("/insights").catch(() => null),
+    ]);
+    if (knowledge) renderLearning(knowledge);
+    if (insights) renderOpportunities(insights);
+  }
+
+  function learnItem(title, detail) {
+    const li = el("li");
+    li.append(el("strong", title), el("span", detail));
+    return li;
+  }
+
+  function renderLearning(k) {
+    const vault = k.vault || {};
+    setTile("l-notes", vault.notes ?? 0);
+    setTile("l-reach", k.sessions ? `${Math.round((100 * k.reached) / k.sessions)}%` : "–");
+    setTile("l-injected", k.injected || 0);
+    setTile("l-filed", (k.lessons && k.lessons.filed) || 0);
+    setTile("l-pending", (k.lessons && k.lessons.pending) || 0);
+    const period = scorePeriod >= 10080 ? "7 days" : "24 h";
+    $("learn-note").textContent = vault.configured
+      ? `The team vault, last ${period}: ${k.reached} of ${k.sessions} sessions got at least one note.`
+      : "The server has no team vault connected yet.";
+    const top = (k.top_notes || []).map((n) =>
+      learnItem(n.note, `${n.sessions} session${n.sessions === 1 ? "" : "s"} · ${listNames(n.users)}`));
+    $("l-top").replaceChildren(...(top.length ? top : [learnItem("None yet", "Notes reach a session when they apply.")]));
+    const recent = (k.filed || []).map((l) =>
+      learnItem(basename(l.nota || "") || l.titulo || clip(l.texto, 60), `from ${l.autor} · ${l.fuente} · ${ago(l.done_at)}`));
+    $("l-recent").replaceChildren(...(recent.length ? recent : [learnItem("Nothing filed yet", "Lessons go in when sessions end and when someone shares a discovery.")]));
+    $("l-holdout").textContent = k.held_out
+      ? `${k.held_out} session${k.held_out === 1 ? "" : "s"} had a matching note held back on purpose, to compare against.`
+      : "";
+  }
+
+  function insightCard(kind, cls, label, title, evidence, todo) {
+    const li = el("li", null, `insight ${cls}`);
+    const head = el("header");
+    head.append(el("span", kind, "ibadge"), el("span", label, "itype"));
+    li.append(head, el("strong", title), el("p", evidence));
+    if (todo) li.append(el("p", todo, "act-line"));
+    return li;
+  }
+
+  function renderOpportunities(data) {
+    const cards = [];
+    for (const o of data.shared || []) {
+      const kind = o.tipos.find((t) => BUILD_KINDS[t]) || o.tipos[0] || "skill";
+      const what = o.que.map((q) => `${q.persona}: ${q.que}`).join(" · ");
+      cards.push(insightCard(kind, BUILD_KINDS[kind] || OTHER_KINDS[kind] || "i-build", `Shared by ${listNames(o.personas)}`,
+        o.tema.replaceAll("-", " "), `${Math.round(o.sesiones)} sessions, ${o.horas.toFixed(1)} h. ${clip(what, 220)}`,
+        "Build it once and put it in the team plugin, so everyone gets it."));
+    }
+    // With fewer than three shared ones, each person's biggest opportunity to build
+    if (cards.length < 3) {
+      const own = data.results.flatMap((r) => (r.data.oportunidades || []).map((o) => ({ ...o, persona: r.persona })))
+        .filter((o) => BUILD_KINDS[o.tipo] && !(data.shared || []).some((s) => s.tema === o.tema))
+        .sort((a, b) => Number(b.O || 0) - Number(a.O || 0))
+        .slice(0, 3 - cards.length);
+      for (const o of own) {
+        cards.push(insightCard(o.tipo, BUILD_KINDS[o.tipo], `Only ${o.persona} so far`, o.que,
+          `${o.sesiones} sessions, ${o.horas} h. ${clip(o.evidencia || "", 160)}`, ""));
+      }
+    }
+    const stars = data.results.flatMap((r) => (r.data.estrellas || []).map((e) => ({ ...e, persona: r.persona }))).slice(0, 2);
+    for (const s of stars) {
+      cards.push(insightCard("copy", "i-copy", `Star session · ${s.persona}`, s.titulo, s.evidencia, s.como));
+    }
+    if (!cards.length) {
+      const empty = el("li", null, "insight");
+      empty.append(el("strong", "No /insights uploaded yet."),
+        el("p", "Each person runs /insights in Claude Code; their reviewed result shows up here."));
+      cards.push(empty);
+    }
+    $("opps").replaceChildren(...cards);
+
+    const rows = data.results.map((r) => {
+      const t = r.data.tarjeta || {};
+      const tr = el("tr");
+      const name = el("span", null, "person");
+      name.style.setProperty("--who", colorOf(r.persona));
+      name.append(el("i"), document.createTextNode(r.persona));
+      const nameCell = el("td");
+      nameCell.append(name);
+      const num = (v, f) => (v === null || v === undefined || v === "" ? "–" : f(Number(v)));
+      tr.append(nameCell, el("td", `${r.desde || "?"} → ${r.hasta}`), el("td", num(t.sesiones, String)),
+        el("td", num(t.horas_activas, (h) => `${h.toFixed(1)} h`)), el("td", num(t.K_capitalizacion, fmtK)),
+        el("td", num(t.F_friccion, fmtF)), el("td", String((r.data.oportunidades || []).length)), el("td", String(r.periods)));
+      return tr;
+    });
+    if (!rows.length) {
+      const tr = el("tr");
+      const td = el("td", "Nobody uploaded /insights yet.");
+      td.colSpan = 8;
+      tr.append(td);
+      rows.push(tr);
+    }
+    $("opps-people").replaceChildren(...rows);
+  }
+
   // ---------- File map ----------
   function renderFiles(sessions) {
     const files = new Map();
@@ -2062,6 +2231,7 @@
       showVersion();
       refresh();
       loadScore(true);
+      loadLearning();
       connectFeed();
     } catch (err) {
       apiKey = null;
@@ -2105,6 +2275,7 @@
     scoreSessions = [];
     renderScore();
     loadScore(true);
+    loadLearning();
   }));
   $("t-wait-tile").addEventListener("click", () => {
     const first = $("stage").querySelector(".agent.st-wait.mine");
@@ -2142,6 +2313,7 @@
   setInterval(() => { if (apiKey && teamSessions.length) renderStage(); }, 1000);
   setInterval(() => { if (apiKey) playsSoon(); }, 5000);
   setInterval(() => loadScore().catch(() => {}), 30000);
+  setInterval(() => loadLearning().catch(() => {}), 60000);
   const saved = safe(() => localStorage.getItem(STORAGE_KEY));
   if (saved) signIn(saved);
 </script>

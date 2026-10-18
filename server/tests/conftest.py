@@ -29,7 +29,7 @@ def client(monkeypatch):
         with psycopg.connect(TEST_DATABASE_URL) as conn:
             conn.execute(
                 "TRUNCATE api_keys, sessions, events, conversacion, session_resources, messages, deliveries, "
-                "vault_deliveries, lessons "
+                "vault_deliveries, lessons, insights_results "
                 "RESTART IDENTITY"
             )
         yield test_client
