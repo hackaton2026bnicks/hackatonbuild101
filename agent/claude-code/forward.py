@@ -17,6 +17,7 @@ import time
 import urllib.error
 import urllib.request
 from pathlib import Path
+from typing import Optional
 
 # Reuse the server's scrubber so both sides apply the same rules
 sys.path.insert(0, str(Path(__file__).resolve().parents[2] / "server"))
@@ -124,6 +125,41 @@ def post(request, urlopen=urllib.request.urlopen, sleep=time.sleep):
     return None
 
 
+# Hooks where the model is worth knowing: when a session starts and each time Claude finishes a turn
+MODEL_HOOKS = {"SessionStart", "Stop"}
+TRANSCRIPT_TAIL_BYTES = 256 * 1024
+
+
+def model_from_transcript(path: str) -> Optional[str]:  # noqa: UP007 (runs on Python 3.9)
+    """The model of the last answer in the transcript, so a /model switch shows up at the next Stop."""
+    try:
+        with open(path, "rb") as fh:
+            fh.seek(0, os.SEEK_END)
+            fh.seek(max(0, fh.tell() - TRANSCRIPT_TAIL_BYTES))
+            lines = fh.read().decode("utf-8", errors="replace").splitlines()
+    except OSError:
+        return None
+    for line in reversed(lines):
+        if '"model"' not in line:
+            continue
+        try:
+            entry = json.loads(line)
+        except ValueError:
+            continue
+        model = (entry.get("message") or {}).get("model") if isinstance(entry, dict) else None
+        if isinstance(model, str) and model and not model.startswith("<"):
+            return model
+    return None
+
+
+def with_model(raw: dict) -> dict:
+    if raw.get("hook_event_name") in MODEL_HOOKS and not raw.get("model") and raw.get("transcript_path"):
+        model = model_from_transcript(str(raw["transcript_path"]))
+        if model:
+            raw = {**raw, "model": model}
+    return raw
+
+
 def read_stdin_json(stdin=None):
     """Claude Code writes UTF-8; on Windows sys.stdin decodes cp1252 and turns á into Ã¡."""
     return json.loads((stdin or sys.stdin).buffer.read().decode("utf-8"))
@@ -140,7 +176,7 @@ def main() -> None:
             headers["X-Build101-Repo"] = os.environ["BUILD101_REPO"]
         request = urllib.request.Request(
             os.environ.get("BUILD101_URL", DEFAULT_URL),
-            data=json.dumps(sanitize(raw, dict(os.environ))).encode(),
+            data=json.dumps(sanitize(with_model(raw), dict(os.environ))).encode(),
             headers=headers,
             method="POST",
         )

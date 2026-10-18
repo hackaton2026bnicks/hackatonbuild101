@@ -266,3 +266,14 @@ def test_malformed_hook_body_never_breaks_the_agent(client, make_key):
     response = client.post("/hooks/claude-code", content=b"not json", headers=ana)
     assert response.status_code == 200
     assert response.json() == {}
+
+
+def test_each_session_keeps_the_model_it_runs_on(client, make_key):
+    ana = make_key("ana")
+    hook(client, ana, "SessionStart", "s-model", ANA_REPO, source="startup", model="claude-sonnet-5-5")
+    hook(client, ana, "UserPromptSubmit", "s-model", ANA_REPO, prompt="add idempotency to payments")
+    hook(client, ana, "Stop", "s-model", ANA_REPO, model={"id": "claude-opus-5-5", "display_name": "Opus"})
+    [session] = client.get("/sessions", headers=ana).json()["sessions"]
+    assert session["model"] == "claude-opus-5-5"
+    [live] = client.get("/team", params={"repo": "payments"}, headers=ana).json()["sessions"]
+    assert live["model"] == "claude-opus-5-5"

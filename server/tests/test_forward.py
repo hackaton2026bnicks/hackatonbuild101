@@ -1,4 +1,5 @@
 import importlib.util
+import json
 from pathlib import Path
 
 from api.scrub import scrub
@@ -194,3 +195,18 @@ def test_the_workspace_is_the_worktree_the_shell_is_in_or_else_the_project():
         {"CLAUDE_PROJECT_DIR": "/home/ana/payments"},
     )
     assert out["cwd"] == out["workspace"] == "/home/ana/payments"
+
+
+def test_the_model_comes_from_the_last_answer_in_the_transcript(tmp_path):
+    transcript = tmp_path / "s.jsonl"
+    lines = [
+        {"type": "assistant", "message": {"model": "claude-sonnet-5-5", "content": []}},
+        {"type": "user", "message": {"content": "/model opus"}},
+        {"type": "assistant", "message": {"model": "<synthetic>", "content": []}},
+        {"type": "assistant", "message": {"model": "claude-opus-5-5", "content": []}},
+    ]
+    transcript.write_text("".join(json.dumps(line) + "\n" for line in lines), encoding="utf-8")
+    raw = {"hook_event_name": "Stop", "session_id": "s", "transcript_path": str(transcript)}
+    assert forward.with_model(raw)["model"] == "claude-opus-5-5"
+    assert "model" not in forward.with_model({**raw, "hook_event_name": "PreToolUse"})
+    assert forward.with_model({**raw, "model": "claude-haiku-5-5"})["model"] == "claude-haiku-5-5"

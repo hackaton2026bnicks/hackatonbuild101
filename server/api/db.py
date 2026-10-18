@@ -17,9 +17,9 @@ LESSON_COLUMNS = """id, author AS autor, session_id, repo, texto, titulo, tipo, 
 
 SESSION_UPSERT = """
 INSERT INTO sessions (team, session_id, user_name, agent, parent_session_id, started_at,
-                      last_event_at, last_event_type, last_summary, intent, ended_at, event_count)
+                      last_event_at, last_event_type, last_summary, intent, ended_at, event_count, model)
 VALUES (%(team)s, %(session_id)s, %(user)s, %(agent)s, %(parent)s, %(ts)s,
-        %(ts)s, %(type)s, %(summary)s, %(intent)s, %(ended_at)s, 1)
+        %(ts)s, %(type)s, %(summary)s, %(intent)s, %(ended_at)s, 1, %(model)s)
 ON CONFLICT (team, session_id) DO UPDATE SET
     last_event_at   = GREATEST(sessions.last_event_at, EXCLUDED.last_event_at),
     last_event_type = EXCLUDED.last_event_type,
@@ -27,7 +27,8 @@ ON CONFLICT (team, session_id) DO UPDATE SET
     intent          = COALESCE(sessions.intent, EXCLUDED.intent),  -- the first real request is the task
     ended_at        = CASE WHEN EXCLUDED.last_event_type = 'session_start' THEN NULL
                            ELSE COALESCE(EXCLUDED.ended_at, sessions.ended_at) END,
-    event_count     = sessions.event_count + 1
+    event_count     = sessions.event_count + 1,
+    model           = COALESCE(EXCLUDED.model, sessions.model)  -- the latest one seen, after a /model too
 WHERE sessions.user_name = EXCLUDED.user_name
 """
 
@@ -105,6 +106,9 @@ class Database:
                     "type": event.type,
                     "summary": event.summary(),
                     "intent": event.intent(),
+                    "model": event.payload.get("model")
+                    if isinstance(event.payload.get("model"), str)
+                    else None,
                     "ended_at": ts if event.type == "session_end" else None,
                     "payload": Jsonb(event.payload),
                     "ts": ts,
@@ -129,7 +133,7 @@ class Database:
         async with self.pool.connection() as conn:
             cur = await conn.execute(
                 """
-                SELECT session_id, user_name AS user, agent, parent_session_id, intent,
+                SELECT session_id, user_name AS user, agent, parent_session_id, intent, model,
                        last_event_type, last_summary, started_at, last_event_at, ended_at, event_count
                 FROM sessions
                 WHERE team = %s AND last_event_at > now() - make_interval(mins => %s)
@@ -621,7 +625,7 @@ class Database:
         async with self.pool.connection() as conn:
             cur = await conn.execute(
                 """
-                SELECT s.session_id, s.user_name, s.intent, s.last_summary, s.last_event_at,
+                SELECT s.session_id, s.user_name, s.intent, s.model, s.last_summary, s.last_event_at,
                        ARRAY(SELECT e.value FROM session_resources e
                              WHERE e.team = s.team AND e.session_id = s.session_id AND e.kind = 'edit'
                                AND e.last_seen > now() - make_interval(mins => %(minutes)s)

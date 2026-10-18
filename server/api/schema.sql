@@ -152,3 +152,6 @@ CREATE TABLE IF NOT EXISTS insights_results (
     uploaded_at  timestamptz NOT NULL DEFAULT now(),
     PRIMARY KEY (team, persona, hasta)
 );
+
+-- The model a session runs on (from its hooks, or the last answer in its transcript)
+ALTER TABLE sessions ADD COLUMN IF NOT EXISTS model text;
