@@ -96,8 +96,15 @@ Si la validación falla, corregí `hallazgos.json` y repetí. El script borra to
    ```
 
    Necesita `BUILD101_KEY`. Si el server responde 404, la cola todavía no está desplegada: decilo y seguí.
-2. **Tablero:** paso 8 de la guía (`ArtifactData` `set` en la colección `resultados`). Si no hay
-   permiso de editor, no insistas: el `.md` alcanza.
+2. **Tablero:** los números van a la app del equipo, que guarda uno por persona y período (si
+   subís el mismo período, lo reemplaza) y cruza las oportunidades que comparten 2 personas o más:
+
+   ```bash
+   curl -sf -X POST -H "Authorization: Bearer $BUILD101_KEY" -H "Content-Type: application/json" \
+     --data-binary @"$D/resultado.json" "${BUILD101_API:-https://54-89-124-87.sslip.io}/api/insights"
+   ```
+
+   Si responde 404, el endpoint todavía no está desplegado: decilo y seguí.
 3. **El .md:** pasale la ruta completa de `resultado.md` para que lo comparta con el equipo.
 
 Al final, resumí en 3 líneas qué subió, adónde, y en qué temas coincide con el resto del equipo.

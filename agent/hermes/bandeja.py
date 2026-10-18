@@ -112,16 +112,37 @@ def git(vault: Path, *args: str, run=subprocess.run) -> subprocess.CompletedProc
     return run(["git", "-C", str(vault), *args], capture_output=True, text=True)
 
 
+def note_type(path: Path) -> str:
+    try:
+        head = path.read_text(encoding="utf-8")[:500]
+    except OSError:
+        return ""
+    for line in head.splitlines()[1:]:
+        if line.startswith("tipo:"):
+            return line[5:].strip()
+        if line.strip() == "---":
+            break
+    return ""
+
+
 def changed_notes(vault: Path, run=subprocess.run) -> list[str]:
-    """Notas tocadas en conocimiento/, las nuevas primero. MEMORY.md y las personas no son la nota."""
-    out = git(vault, "status", "--porcelain", "--untracked-files=all", "--", "conocimiento", run=run).stdout
-    new, touched = [], []
-    for line in out.splitlines():
-        status, path = line[:2], line[3:].strip().strip('"')
+    """Notas tocadas en conocimiento/: las nuevas primero, y los componentes al final, porque el
+    archivista suele crear el del componente al enlazar la nota. MEMORY.md y las personas no son la nota."""
+    # -z: sin comillas ni escapes octales en los nombres con acentos o espacios
+    out = git(vault, "status", "--porcelain", "-z", "--untracked-files=all", "--", "conocimiento", run=run)
+    ranked = []
+    for entry in out.stdout.split("\0"):
+        status, path = entry[:2], entry[3:]
         if not path.endswith(".md") or path.endswith("MEMORY.md") or "/Equipo/" in path:
             continue
-        (new if "?" in status or "A" in status else touched).append(path)
-    return new + touched
+        is_new = "?" in status or "A" in status
+        ranked.append((not is_new, note_type(vault / path) == "componente", path))
+    return [path for *_, path in sorted(ranked)]
+
+
+def git_changed(vault: Path, folder: str, run=subprocess.run) -> bool:
+    """Algo staged en esa carpeta (MEMORY.md incluido), aunque no sea una nota nueva."""
+    return git(vault, "diff", "--cached", "--quiet", "--", folder, run=run).returncode != 0
 
 
 def file_one(lesson: dict, vault: Path, run=subprocess.run) -> dict | None:
@@ -143,10 +164,15 @@ def file_one(lesson: dict, vault: Path, run=subprocess.run) -> dict | None:
     # Solo viajan las carpetas que escribe el archivista; git add falla entero si falta una
     folders = [name for name in ("conocimiento", "privado") if (vault / name).is_dir()]
     git(vault, "add", "--", *folders, run=run)
-    if git(vault, "diff", "--cached", "--quiet", run=run).returncode == 0:
+    if not notes and not git_changed(vault, "conocimiento", run=run):
+        # No escribió ninguna nota (a lo sumo anotó en el registro): es un descarte
         reply = (answer.stdout or "").strip()
         motivo = reply.split("DESCARTADA:", 1)[1].strip() if "DESCARTADA:" in reply else reply
-        return {"descartada": (motivo or "el archivista no escribió nada")[:300]}
+        result = {"descartada": (motivo or "el archivista no escribió ninguna nota")[:300]}
+        if git(vault, "diff", "--cached", "--quiet", run=run).returncode != 0:
+            git(vault, "-c", f"user.name={author}", "commit", "-q", "-m", f"{author}: registro", run=run)
+            git(vault, "push", "-q", run=run)
+        return result
     title = str(lesson.get("titulo") or lesson.get("texto") or "lección")
     message = f"{author}: {' '.join(title.split())[:60]}"
     git(vault, "-c", f"user.name={author}", "commit", "-q", "-m", message, run=run)
