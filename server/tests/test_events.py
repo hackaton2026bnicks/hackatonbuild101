@@ -74,3 +74,18 @@ def test_unknown_event_type_is_rejected(client, make_key):
     ana = make_key("ana")
     response = client.post("/events", json={"events": [event("s-ana", "something_else")]}, headers=ana)
     assert response.status_code == 422
+
+
+def test_replies_and_harness_text_do_not_replace_the_task(client, make_key):
+    headers = make_key("ana")
+    prompts = [
+        "integrate PSD2 payment initiation",
+        "<system-reminder>You are operating in a git worktree.</system-reminder>",
+        "Sí, creá una rama y un PR",
+        "dale",
+    ]
+    events = [event("s-ana", "intent", prompt=p) for p in prompts]
+    client.post("/events", json={"events": events}, headers=headers)
+
+    session = client.get("/sessions", headers=headers).json()["sessions"][0]
+    assert session["intent"] == "integrate PSD2 payment initiation"

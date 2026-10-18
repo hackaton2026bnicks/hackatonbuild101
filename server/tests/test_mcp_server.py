@@ -86,11 +86,11 @@ def test_two_agents_share_ask_and_answer_through_the_tools(client, make_key, via
 
     text, _ = call("ask_team", bob_env, question="Which sandbox user has 2FA disabled?")
     question_id = int(text.split("#")[1].split(".")[0])
-    asked = output(hook(client, ana, "UserPromptSubmit", "s-ana", ANA_REPO, prompt="go on"))
+    asked = output(hook(client, ana, "UserPromptSubmit", "s-ana", ANA_REPO, prompt="check the sandbox users"))
     assert f"question_id={question_id}" in asked["additionalContext"]
 
     status, _ = call("team_status", ana_env)
-    assert "- you: go on" in status and f"#{question_id} from bob" in status
+    assert "- you: check the sandbox users" in status and f"#{question_id} from bob" in status
 
     text, is_error = call(
         "answer_team", ana_env, question_id=question_id, answer="Use test-02, password in 1Password."
