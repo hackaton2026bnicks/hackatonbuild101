@@ -124,8 +124,12 @@ async def publish_message(body: MessageCreate, caller: Caller, request: Request)
         question = await db.get_message(caller.team, body.reply_to)
         if not question or question["kind"] != "question":
             raise HTTPException(404, "No question with that id.")
-        # The answer goes to whoever asked, wherever their session is now
-        topics, to_session = question["topics"], question["from_session"]
+        # The answer goes to whoever asked: their session, or else their newest one in the repo.
+        # An asker with no live session gets it at their next one, and nobody else does.
+        to_session = question["from_session"] or (
+            body.repo and await db.live_session(caller.team, question["from_user"], body.repo)
+        ) or None
+        topics = question["topics"] if to_session else [f"user:{question['from_user']}"]
     elif not topics and body.repo and body.kind in ("discovery", "question"):
         # Agents publishing without topics mean their repo, not every team in the org
         topics = [f"repo:{body.repo}"]

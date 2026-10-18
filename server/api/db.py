@@ -465,7 +465,7 @@ class Database:
                   AND EXISTS (SELECT 1 FROM session_resources r
                               WHERE r.team = s.team AND r.session_id = s.session_id
                                 AND r.kind = 'repo' AND r.value = %(repo)s)
-                ORDER BY s.last_event_at DESC
+                ORDER BY s.user_name, s.started_at, s.session_id
                 """,
                 {"team": team, "repo": repo, "minutes": minutes},
             )

@@ -1,6 +1,7 @@
 """Request and response models. Event follows the normalized schema in docs/SPEC.md section 3."""
 
 import json
+import re
 from datetime import datetime
 from typing import Annotated, Any, Literal
 
@@ -10,6 +11,13 @@ MAX_PAYLOAD_BYTES = 64 * 1024
 MAX_BATCH = 500
 MAX_MESSAGE_CHARS = 100_000
 SUMMARY_CHARS = 200
+# A prompt shorter than this, or opening like a reply, does not replace the session's task
+MIN_TASK_WORDS = 3
+# "si"/"no" only count as a reply when punctuated: "Si trabajo ahora…" states a task
+FOLLOW_UP = re.compile(
+    r"(?i)^(?:(?:si|no)\s*[,.!]|(?:sí|ok(?:ay)?|dale|listo|bueno|perfecto|genial|yes|yep|sure|go ahead"
+    r"|continu[aeá]\w*|seguí)\b)"
+)
 
 EventType = Literal[
     "session_start",
@@ -56,9 +64,21 @@ class Event(BaseModel):
         return self.type
 
     def intent(self) -> str | None:
+        """The session's task, taken from a prompt that states one. None keeps the task already known."""
         if self.type == "intent" and isinstance(self.payload.get("prompt"), str):
-            return self.payload["prompt"][:SUMMARY_CHARS]
+            prompt = self.payload["prompt"].strip()
+            if states_a_task(prompt):
+                return prompt[:SUMMARY_CHARS]
         return None
+
+
+def states_a_task(prompt: str) -> bool:
+    """False for prompts the harness writes (<system-reminder>, <task-notification>, slash commands)
+    and for replies to the agent ("sí, dale", "ok, creá la rama"), which would hide the real task."""
+    if not prompt or prompt.startswith("<"):
+        return False
+    words = prompt.split()
+    return len(words) >= MIN_TASK_WORDS and not FOLLOW_UP.match(prompt)
 
 
 class EventBatch(BaseModel):
@@ -89,7 +109,7 @@ Topic = Annotated[str, Field(pattern=r"^(repo|host|file):\S{1,200}$")]
 DEFAULT_TTL_MINUTES = {
     "discovery": 7 * 24 * 60,
     "alert": 60,
-    "note": 24 * 60,
+    "note": 8 * 60,
     "question": 4 * 60,
     "answer": 24 * 60,
 }

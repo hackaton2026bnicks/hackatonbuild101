@@ -39,6 +39,7 @@ CONTEXT_EVENTS = {
 
 URL_HOST = re.compile(r"https?://([A-Za-z0-9.-]+)")
 TEXT_LIMIT = 500
+WORKTREES = (".claude", "worktrees")
 SUMMARY_LIMIT = 160
 
 
@@ -68,9 +69,13 @@ def repo_relative(file_path: str, cwd: str) -> str | None:
     if not file_path or not cwd:
         return None
     try:
-        return _pure_path(file_path).relative_to(_pure_path(cwd)).as_posix()
+        parts = _pure_path(file_path).relative_to(_pure_path(cwd)).parts
     except ValueError:
         return None
+    # A Claude Code worktree is a copy of the repo: its files are the repo's files
+    if parts[:2] == WORKTREES and len(parts) > 3:
+        parts = parts[3:]
+    return PurePosixPath(*parts).as_posix()
 
 
 def repo_name(cwd: str, header: str | None) -> str:

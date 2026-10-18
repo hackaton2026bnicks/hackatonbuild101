@@ -233,8 +233,10 @@ async def share_nudge(db: Database, broker: Broker, caller: Principal, call: Hoo
 
 async def deliver_messages(db: Database, caller: Principal, call: HookCall, limit: int) -> list[dict]:
     """Record pending messages as delivered and return the ones to inject (holdout ones are left out)."""
-    topics = await db.session_topics(caller.team, call.session_id)
+    topics = await db.session_topics(caller.team, call.session_id) + [f"user:{caller.user}"]
     pending = await db.pending_messages(caller.team, call.session_id, topics, limit)
+    # The query picks the most urgent; the agent reads them in the order they were written
+    pending = sorted(pending, key=lambda message: message["created_at"])
     injected = []
     for message in pending:
         held_out = message["kind"] == "discovery" and in_holdout(message["id"], call.session_id)

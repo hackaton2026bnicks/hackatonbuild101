@@ -111,3 +111,26 @@ def test_new_session_learns_who_else_is_working_in_the_repo(client, make_key):
 
     alone = output(hook(client, ana, "SessionStart", "s-solo", "/home/ana/code/frontend", source="startup"))
     assert alone == {}
+
+
+def test_an_answer_to_a_question_without_a_session_reaches_only_the_asker(client, make_key):
+    ana, bob, cai = make_key("ana"), make_key("bob"), make_key("cai")
+    hook(client, bob, "UserPromptSubmit", "s-bob", BOB_REPO, prompt="payouts")
+    hook(client, cai, "UserPromptSubmit", "s-cai", BOB_REPO, prompt="ledger")
+    question = publish(client, ana, kind="question", body="Which sandbox user?", repo="payments")
+    answer = publish(client, bob, kind="answer", reply_to=question["id"], body="test-02", repo="payments")
+    assert answer["topics"] == ["user:ana"]
+
+    assert "test-02" not in str(output(bash(client, cai, "s-cai", BOB_REPO, "ls")))
+    started = output(hook(client, ana, "SessionStart", "s-ana", ANA_REPO))
+    assert "test-02" in started["additionalContext"]
+
+
+def test_messages_arrive_in_the_order_they_were_written(client, make_key):
+    ana, bob = make_key("ana"), make_key("bob")
+    hook(client, bob, "UserPromptSubmit", "s-bob", BOB_REPO, prompt="payouts")
+    publish(client, ana, kind="note", body="Take the UI.", repo="payments")
+    publish(client, ana, kind="discovery", body="Changed plans: I will redo the UI.", repo="payments")
+
+    context = output(bash(client, bob, "s-bob", BOB_REPO, "ls"))["additionalContext"]
+    assert context.index("Take the UI.") < context.index("Changed plans")
