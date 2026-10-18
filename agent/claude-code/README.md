@@ -7,6 +7,7 @@ Claude Code calls the team server on every hook. The server records what your se
 - **Subagent brief.** When your session starts a subagent, the subagent gets the parent's task, edited files, recent failures and team notes.
 - **Who else is here.** When a session starts, it learns which teammates are working in the same repo, on what task and which files, and catches up on the team's latest 10 messages.
 - **Questions and answers.** Questions from teammates' agents reach you at your next hook; an answer reaches only the session that asked.
+- **Team knowledge.** Lessons the team kept (see below) reach your agent when they apply: the repo's best 3 when a session starts, the ones about a file or host right before your agent touches it, and a matching gotcha right after an error. Each one once per session.
 
 If the server is down or slow, the hook gives up after 4 seconds and the agent keeps working.
 
@@ -20,8 +21,22 @@ If the server is down or slow, the hook gives up after 4 seconds and the agent k
 | `ask_team` | Asks a question; the agent keeps working and the answer arrives in a later turn. |
 | `answer_team` | Answers a question it received as `[build101 · question #N]`. |
 | `team_status` | Lists live sessions in the repo, their task and edited files, and unanswered questions. |
+| `kb_search` | Searches the team knowledge base before debugging, setting up or building something. |
+| `kb_remember` | Keeps a lesson (gotcha, receta, decision, dato, criterio, recurso) that the team sees right away. |
+| `kb_feedback` | Rates a unit as useful, wrong or stale; the author approves or discards their candidates. |
+| `kb_candidates` | Lists the lessons inferred from your sessions that wait for your OK. |
 
 Restart Claude Code in this repo and approve the `build101` server when asked. It uses the same `BUILD101_KEY`, scrubs what the agent writes with the forwarder's rules, and sends no file contents. Where `python` is not on PATH (macOS), also set `BUILD101_PYTHON=python3`.
+
+## Team knowledge base
+
+Messages expire; knowledge stays (design in [docs/DIK-V2.md](../../docs/DIK-V2.md)). A lesson gets in three ways:
+
+1. **A discovery.** Everything shared with `share_discovery` is also kept as a `gotcha`, tied to its files and hosts.
+2. **On request.** `kb_remember` when you tell the agent "acordate…" or it decides something worth keeping.
+3. **From your own sessions, after the fact.** [learn.py](learn.py) runs when a session ends or compacts. On your machine it reads the part of the transcript it has not read yet, and only if it shows a solved error, a correction or a "remember this", asks a small model (`claude -p --model haiku`, with [tools/knowledge_prompt.md](../../tools/knowledge_prompt.md)) for up to 3 lessons. They reach the server as **candidates only you see**. At your next session start your terminal shows how many wait for you; ask Claude to review them and approve or discard each one. A candidate also becomes active when a second session learns the same thing.
+
+A unit two people mark as wrong is archived. `BUILD101_LEARN=0` turns the extractor off; `BUILD101_LEARN_MODEL` picks another model.
 
 ## What leaves your machine
 
@@ -34,7 +49,7 @@ Every hook goes through [forward.py](forward.py), which runs on your machine and
 
 Scrubbing happens before anything is sent. It removes known secret formats (bearer tokens, JWTs, API keys, AWS and GitHub keys, `password=`-style values, credentials in URLs), random-looking tokens, and the literal value of any environment variable whose name contains `KEY`, `TOKEN`, `SECRET`, `PASSW`, `CREDENTIAL` or `AUTH`. The server scrubs again before storing.
 
-File contents, edit strings, tool output and the transcript are never sent.
+File contents, edit strings, tool output and the transcript are never sent. The extractor reads the transcript locally and sends only the lessons it proposes, scrubbed with the same rules.
 
 ## Setup inside this repo
 

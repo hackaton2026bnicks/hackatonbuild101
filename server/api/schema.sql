@@ -100,3 +100,44 @@ CREATE TABLE IF NOT EXISTS deliveries (
     delivered_at  timestamptz NOT NULL DEFAULT now(),
     PRIMARY KEY (message_id, session_id)
 );
+
+-- Team knowledge (docs/DIK-V2.md): stable, atomic units that outlive messages and reach sessions by situation.
+CREATE TABLE IF NOT EXISTS knowledge_units (
+    id              bigserial PRIMARY KEY,
+    team            text NOT NULL,
+    repo            text,
+    type            text NOT NULL,       -- gotcha | receta | decision | dato | criterio | recurso
+    title           text NOT NULL,
+    norm_title      text NOT NULL,       -- for merging the same lesson learned twice
+    body            text NOT NULL,
+    dead_ends       text[] NOT NULL DEFAULT '{}',
+    files           text[] NOT NULL DEFAULT '{}',
+    hosts           text[] NOT NULL DEFAULT '{}',
+    keywords        text[] NOT NULL DEFAULT '{}',
+    confidence      text NOT NULL,       -- explicito | verificado | observado
+    status          text NOT NULL,       -- candidata (only its author sees it) | activa | archivada
+    author          text NOT NULL,
+    source_session  text,
+    message_id      bigint REFERENCES messages (id) ON DELETE SET NULL,
+    confirmations   integer NOT NULL DEFAULT 1,
+    tsv             tsvector NOT NULL,
+    created_at      timestamptz NOT NULL DEFAULT now(),
+    updated_at      timestamptz NOT NULL DEFAULT now()
+);
+
+CREATE INDEX IF NOT EXISTS knowledge_units_tsv ON knowledge_units USING gin (tsv);
+CREATE INDEX IF NOT EXISTS knowledge_units_files ON knowledge_units USING gin (files);
+CREATE INDEX IF NOT EXISTS knowledge_units_hosts ON knowledge_units USING gin (hosts);
+CREATE INDEX IF NOT EXISTS knowledge_units_team_status ON knowledge_units (team, status, repo);
+CREATE INDEX IF NOT EXISTS knowledge_units_norm ON knowledge_units (team, norm_title);
+
+-- What happened to each unit: injected or held out in a session, confirmed, and the feedback it got.
+CREATE TABLE IF NOT EXISTS knowledge_events (
+    ku_id       bigint NOT NULL REFERENCES knowledge_units (id) ON DELETE CASCADE,
+    team        text NOT NULL,
+    session_id  text NOT NULL DEFAULT '',
+    user_name   text NOT NULL,
+    event       text NOT NULL,           -- injected | holdout | confirmed | useful | wrong | stale | approve | discard
+    ts          timestamptz NOT NULL DEFAULT now(),
+    PRIMARY KEY (ku_id, session_id, user_name, event)
+);

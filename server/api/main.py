@@ -10,7 +10,7 @@ from typing import Annotated
 from fastapi import Depends, FastAPI, Header, HTTPException, Query, Request
 from fastapi.responses import StreamingResponse
 
-from api import collab
+from api import collab, kb
 from api.auth import Principal, hash_key, new_key, require_admin, require_key
 from api.broker import Broker
 from api.db import Database
@@ -22,6 +22,8 @@ from api.models import (
     ConversationCreate,
     EventBatch,
     KeyRequest,
+    KnowledgeCreate,
+    KnowledgeFeedback,
     MessageCreate,
 )
 from api.ratelimit import RateLimiter, rate_limit_middleware
@@ -149,7 +151,94 @@ async def publish_message(body: MessageCreate, caller: Caller, request: Request)
         to_session=to_session,
     )
     request.app.state.broker.publish(caller.team, collab.feed_item(message, caller.user))
+    if body.kind == "discovery":
+        # A discovery is hot for its readers now and stays in the knowledge base for whoever comes later
+        await kb.remember(db, caller.team, caller.user, discovery_unit(message, body.repo), session_id)
     return message
+
+
+def discovery_unit(message: dict, repo: str | None) -> dict:
+    text = message["body"].strip()
+    first = text.split(". ")[0].rstrip(".")
+    title = first if len(first) <= 120 else first[:117].rsplit(" ", 1)[0] + "..."
+    topics = message["topics"]
+    return {
+        "type": "gotcha",
+        "title": title,
+        "body": text,
+        "files": [t[5:] for t in topics if t.startswith("file:")],
+        "hosts": [t[5:] for t in topics if t.startswith("host:")],
+        "confidence": "explicito",
+        "repo": repo,
+        "message_id": message["id"],
+    }
+
+
+def clean_unit(body: KnowledgeCreate) -> dict:
+    unit = body.model_dump()
+    for field in ("title", "body"):
+        unit[field] = scrub(unit[field])
+    for field in ("dead_ends", "keywords"):
+        unit[field] = [scrub(item) for item in unit[field]]
+    unit["hosts"] = [host.strip().lower() for host in unit["hosts"]]
+    return unit
+
+
+@app.post("/kb", status_code=201)
+async def kb_remember(body: KnowledgeCreate, caller: Caller, request: Request) -> dict:
+    """Keep a lesson, or confirm the unit that already says the same."""
+    db: Database = request.app.state.db
+    session_id = body.session_id
+    if not session_id and body.repo:
+        session_id = await db.live_session(caller.team, caller.user, body.repo)
+    unit, created = await kb.remember(db, caller.team, caller.user, clean_unit(body), session_id)
+    return {"unit": unit, "created": created}
+
+
+@app.get("/kb")
+async def kb_list(
+    caller: Caller,
+    request: Request,
+    q: Annotated[str | None, Query(max_length=500)] = None,
+    repo: Annotated[str | None, Query(max_length=200)] = None,
+    type: Annotated[str | None, Query(max_length=20)] = None,
+    limit: Annotated[int, Query(ge=1, le=200)] = 50,
+) -> dict:
+    """The team's units, newest first, or the ones that best match q. Candidates only for their author."""
+    db: Database = request.app.state.db
+    if q:
+        units = await kb.search(db, caller.team, caller.user, q, repo, type, min(limit, 20))
+    else:
+        units = await kb.list_units(db, caller.team, caller.user, repo, limit)
+    return {"units": units}
+
+
+@app.get("/kb/candidates")
+async def kb_candidates(caller: Caller, request: Request) -> dict:
+    return {"units": await kb.candidates(request.app.state.db, caller.team, caller.user, 20)}
+
+
+@app.get("/kb/{ku_id}")
+async def kb_get(ku_id: int, caller: Caller, request: Request) -> dict:
+    unit = await kb.get(request.app.state.db, caller.team, caller.user, ku_id)
+    if not unit:
+        raise HTTPException(404, "No knowledge unit with that id.")
+    return unit
+
+
+@app.post("/kb/{ku_id}/feedback")
+async def kb_feedback(ku_id: int, body: KnowledgeFeedback, caller: Caller, request: Request) -> dict:
+    db: Database = request.app.state.db
+    session_id = body.session_id
+    if not session_id and body.repo:
+        session_id = await db.live_session(caller.team, caller.user, body.repo)
+    try:
+        unit = await kb.feedback(db, caller.team, caller.user, ku_id, body.verdict, session_id or "")
+    except PermissionError as error:
+        raise HTTPException(403, str(error)) from None
+    if not unit:
+        raise HTTPException(404, "No knowledge unit with that id.")
+    return unit
 
 
 @app.get("/repos")

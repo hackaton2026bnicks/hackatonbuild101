@@ -117,6 +117,32 @@ DEFAULT_TTL_MINUTES = {
 PRIORITY = {"answer": 3, "alert": 2, "question": 1, "discovery": 1, "note": 0}
 
 
+KnowledgeType = Literal["gotcha", "receta", "decision", "dato", "criterio", "recurso"]
+ShortText = Annotated[str, Field(min_length=1, max_length=300)]
+
+
+class KnowledgeCreate(BaseModel):
+    """A lesson worth keeping (docs/DIK-V2.md). explicito: someone asked to keep it, so the team sees it now.
+    observado: the local extractor inferred it, so only its author sees it until they approve it."""
+
+    type: KnowledgeType = "gotcha"
+    title: str = Field(min_length=3, max_length=200)
+    body: str = Field(min_length=1, max_length=2000)
+    dead_ends: list[ShortText] = Field(default_factory=list, max_length=5)
+    files: list[ShortText] = Field(default_factory=list, max_length=10)
+    hosts: list[ShortText] = Field(default_factory=list, max_length=10)
+    keywords: list[ShortText] = Field(default_factory=list, max_length=10)
+    confidence: Literal["explicito", "verificado", "observado"] = "explicito"
+    repo: str | None = Field(default=None, max_length=200)
+    session_id: str | None = Field(default=None, max_length=128)
+
+
+class KnowledgeFeedback(BaseModel):
+    verdict: Literal["useful", "wrong", "stale", "approve", "discard"]
+    repo: str | None = Field(default=None, max_length=200)
+    session_id: str | None = Field(default=None, max_length=128)
+
+
 class MessageCreate(BaseModel):
     """Something one session or person shares with the sessions it is relevant to.
 
