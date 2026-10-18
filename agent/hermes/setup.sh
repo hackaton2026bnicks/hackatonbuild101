@@ -8,7 +8,8 @@ set -euo pipefail
 HERE="$(cd "$(dirname "$0")" && pwd)"
 REPO="$(cd "$HERE/../.." && pwd)"
 VAULT="${VAULT:-$(dirname "$REPO")/build101-vault}"
-MODEL="${MODEL:-gpt-5.5}"
+# gpt-5.5 no se acepta con cuentas de ChatGPT; gpt-6.1-sol es el que usa Codex CLI
+MODEL="${MODEL:-gpt-6.1-sol}"
 BIN="$HOME/.local/bin"
 
 command -v hermes >/dev/null || {
