@@ -38,6 +38,9 @@ CONTEXT_EVENTS = {
 }
 
 URL_HOST = re.compile(r"https?://([A-Za-z0-9.-]+)")
+# From "<<EOF" (or <<'EOF', <<-EOF) to the line that closes it
+HEREDOC = re.compile(r"<<-?\s*(['\"]?)(\w+)\1.*?\n.*?^\s*\2\s*$", re.DOTALL | re.MULTILINE)
+MESSAGE_ARG = re.compile(r"""(?:-m|--message|--body|--title)(?:\s+|=)("(?:[^"\\]|\\.)*"|'[^']*')""")
 TEXT_LIMIT = 500
 WORKTREES = (".claude", "worktrees")
 SUMMARY_LIMIT = 160
@@ -88,6 +91,11 @@ def hosts_in(text: str) -> list[str]:
     return sorted({host.lower() for host in URL_HOST.findall(text)})
 
 
+def command_hosts(command: str) -> list[str]:
+    """Hosts a command calls. A URL inside a heredoc or a commit or PR message is text, not a call."""
+    return hosts_in(MESSAGE_ARG.sub(" ", HEREDOC.sub(" ", command)))
+
+
 def parse(raw: dict, repo_header: str | None = None) -> HookCall | None:
     event_name = raw.get("hook_event_name")
     session_id = raw.get("session_id")
@@ -118,7 +126,7 @@ def parse(raw: dict, repo_header: str | None = None) -> HookCall | None:
         command = tool_input.get("command")
         if isinstance(command, str):
             payload["command"] = scrub(command, TEXT_LIMIT)
-            call.hosts = hosts_in(command)
+            call.hosts = command_hosts(command)
         url = tool_input.get("url")
         if isinstance(url, str):
             call.hosts = sorted(set(call.hosts) | set(hosts_in(url)))
