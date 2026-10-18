@@ -153,14 +153,15 @@ async def team(
     repo: Annotated[str, Query(min_length=1, max_length=200)],
     active_minutes: Annotated[int, Query(ge=1, le=24 * 60)] = collab.PRESENCE_MINUTES,
 ) -> dict:
-    """Who is working in a repo right now, on what, and which questions are waiting for an answer."""
+    """Who is working in a repo right now, which questions wait for an answer, and answers to yours."""
     db: Database = request.app.state.db
     me = await db.live_session(caller.team, caller.user, repo)
     sessions = await db.team_activity(caller.team, repo, active_minutes)
     for row in sessions:
         row["you"] = row["session_id"] == me
     questions = await db.open_questions(caller.team, [f"repo:{repo}"], 10)
-    return {"repo": repo, "sessions": sessions, "open_questions": questions}
+    answers = await db.answers_to(caller.team, caller.user, 10)
+    return {"repo": repo, "sessions": sessions, "open_questions": questions, "answers_for_you": answers}
 
 
 @app.get("/messages")

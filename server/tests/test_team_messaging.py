@@ -81,6 +81,20 @@ def test_team_shows_who_works_where_and_open_questions(client, make_key):
     assert client.get("/team", params={"repo": "payments"}, headers=ana).json()["open_questions"] == []
 
 
+def test_answers_are_listed_for_an_asker_whose_hooks_do_not_reach(client, make_key):
+    ana, bob = make_key("ana"), make_key("bob")
+    hook(client, bob, "UserPromptSubmit", "s-bob", BOB_REPO, prompt="payouts")
+    question = publish(client, ana, kind="question", body="Which sandbox user?", repo="payments")
+    assert question["from_session"] is None
+    publish(client, bob, kind="answer", reply_to=question["id"], body="test-02", repo="payments")
+
+    answers = client.get("/team", params={"repo": "payments"}, headers=ana).json()["answers_for_you"]
+    assert [(a["reply_to"], a["body"], a["from_user"]) for a in answers] == [
+        (question["id"], "test-02", "bob")
+    ]
+    assert client.get("/team", params={"repo": "payments"}, headers=bob).json()["answers_for_you"] == []
+
+
 def test_new_session_learns_who_else_is_working_in_the_repo(client, make_key):
     ana, bob = make_key("ana"), make_key("bob")
     hook(client, ana, "UserPromptSubmit", "s-ana", ANA_REPO, prompt="add idempotency to refunds")
