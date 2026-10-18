@@ -28,6 +28,9 @@ va en `autor:` y en el registro.
      autor y marcalo con `> [!warning] Contradicción`.
    - Si no existe: creala dentro de `conocimiento/`, en la subcarpeta que mejor
      encaje o en una nueva.
+   - Si es una `receta` y se hace con una skill o comando del equipo (por ejemplo
+     `/insights`), poné `skill: <nombre>` en el frontmatter. Así el hook del pedido
+     la puede sugerir con la skill en la mano.
 3. **Enlazá.** Cada nota nueva enlaza a la nota de su componente (por ejemplo
    `[[Servidor API]]` para `server/api/`), a la persona que la aportó si importa,
    y a decisiones o gotchas relacionados. Si algo merece nota y no la tiene,
