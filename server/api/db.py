@@ -261,7 +261,8 @@ class Database:
                 """
                 SELECT DISTINCT h.host
                 FROM events f, jsonb_array_elements_text(f.payload -> 'hosts') AS h(host)
-                WHERE f.team = %(team)s AND f.session_id = %(session)s AND f.payload ->> 'hook' = 'PostToolUseFailure'
+                WHERE f.team = %(team)s AND f.session_id = %(session)s
+                  AND f.payload ->> 'hook' = 'PostToolUseFailure'
                   AND EXISTS (
                       SELECT 1 FROM events ok
                       WHERE ok.team = f.team AND ok.session_id = f.session_id AND ok.id > f.id
