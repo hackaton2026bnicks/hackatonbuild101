@@ -397,6 +397,26 @@ class Database:
                 (message_id, team, session_id, hook, outcome),
             )
 
+    async def vault_notes_seen(self, team: str, session_id: str) -> set[str]:
+        async with self.pool.connection() as conn:
+            cur = await conn.execute(
+                "SELECT note FROM vault_deliveries WHERE team = %s AND session_id = %s", (team, session_id)
+            )
+            return {row["note"] for row in await cur.fetchall()}
+
+    async def record_vault_delivery(
+        self, team: str, session_id: str, user: str, note: str, hook: str, outcome: str
+    ) -> None:
+        async with self.pool.connection() as conn:
+            await conn.execute(
+                """
+                INSERT INTO vault_deliveries (team, session_id, user_name, note, hook, outcome)
+                VALUES (%s, %s, %s, %s, %s, %s)
+                ON CONFLICT (team, session_id, note) DO NOTHING
+                """,
+                (team, session_id, user, note, hook, outcome),
+            )
+
     async def session_brief(self, team: str, session_id: str) -> dict:
         """What a subagent should know about its parent session."""
         async with self.pool.connection() as conn:

@@ -205,6 +205,19 @@ def check_seen(report: Report, environ: dict, user: str) -> None:
         report.ok(f"Your hooks are arriving: last one {minutes} min ago, {len(mine)} session(s) today")
 
 
+def check_vault(report: Report, environ: dict) -> None:
+    try:
+        vault = get("/vault?limit=1", environ).get("vault", {})
+    except (urllib.error.URLError, OSError, ValueError):
+        return
+    if not vault.get("configured"):
+        report.warn("The server has no team vault connected", "Ask Nico: the server has no VAULT_TOKEN.")
+    elif vault.get("error") and not vault.get("notes"):
+        report.bad("The server cannot read the team vault", vault["error"])
+    else:
+        report.ok(f"Team vault: {vault.get('notes', 0)} notes reach your sessions when they apply")
+
+
 def main() -> int:
     environ = dict(os.environ)
     report = Report()
@@ -217,6 +230,7 @@ def main() -> int:
     check_checkout(report)
     if user:
         check_seen(report, environ, user)
+        check_vault(report, environ)
     print("\nAll good." if not report.failed else f"\n{report.failed} problem(s) to fix.")
     return 1 if report.failed else 0
 

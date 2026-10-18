@@ -100,3 +100,16 @@ CREATE TABLE IF NOT EXISTS deliveries (
     delivered_at  timestamptz NOT NULL DEFAULT now(),
     PRIMARY KEY (message_id, session_id)
 );
+
+-- Vault notes handed to a session by a hook (server/api/vault.py): never twice, and with a holdout to
+-- measure whether they help. The note is its title, which is its file name in build101-vault.
+CREATE TABLE IF NOT EXISTS vault_deliveries (
+    team          text NOT NULL,
+    session_id    text NOT NULL,
+    user_name     text NOT NULL,
+    note          text NOT NULL,
+    hook          text NOT NULL,
+    outcome       text NOT NULL,         -- injected | holdout
+    delivered_at  timestamptz NOT NULL DEFAULT now(),
+    PRIMARY KEY (team, session_id, note)
+);

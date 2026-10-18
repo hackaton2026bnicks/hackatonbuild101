@@ -28,7 +28,8 @@ def client(monkeypatch):
     with TestClient(app) as test_client:
         with psycopg.connect(TEST_DATABASE_URL) as conn:
             conn.execute(
-                "TRUNCATE api_keys, sessions, events, conversacion, session_resources, messages, deliveries "
+                "TRUNCATE api_keys, sessions, events, conversacion, session_resources, messages, deliveries, "
+                "vault_deliveries "
                 "RESTART IDENTITY"
             )
         yield test_client
