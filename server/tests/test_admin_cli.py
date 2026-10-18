@@ -1,7 +1,7 @@
 import pytest
 from conftest import TEST_DATABASE_URL
 
-from api.admin import run
+from api.admin import run, unmangle
 
 
 def test_created_key_works_and_can_be_revoked(client):
@@ -22,3 +22,23 @@ def test_invalid_names_and_commands_are_rejected(client):
         run(["create-key", "ana; DROP TABLE api_keys"], TEST_DATABASE_URL)
     with pytest.raises(SystemExit):
         run(["delete-everything"], TEST_DATABASE_URL)
+
+
+def test_text_garbled_by_a_cp1252_stdin_is_repaired_only_on_apply(client, make_key):
+    ana = make_key("ana")
+    garbled = "anÃ¡lisis de sesiÃ³n Â¿listo? itâ€™s"
+    client.post("/messages", json={"kind": "note", "body": garbled}, headers=ana)
+    client.post("/messages", json={"kind": "note", "body": "Ya está bien: ñandú"}, headers=ana)
+
+    dry = run(["repair-text"], TEST_DATABASE_URL)
+    assert "messages.body: 1" in dry and "Would repair" in dry
+    assert run(["repair-text", "--apply"], TEST_DATABASE_URL).endswith("Repaired: 1 values.")
+
+    bodies = {m["body"] for m in client.get("/messages", headers=ana).json()["messages"]}
+    assert bodies == {"análisis de sesión ¿listo? it’s", "Ya está bien: ñandú"}
+    assert "Repaired: 0 values." in run(["repair-text", "--apply"], TEST_DATABASE_URL)
+
+
+def test_correct_text_is_never_touched():
+    for text in ("Árbol y café", "plain ascii", "Café con una Ã suelta", "3Â piso"):
+        assert unmangle(text) == text

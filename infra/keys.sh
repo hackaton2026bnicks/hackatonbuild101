@@ -1,14 +1,14 @@
 #!/usr/bin/env bash
 # Manage team API keys on the deployed server.
 # The admin API is blocked from the internet, so the command runs inside the server through SSM.
-# Usage: ./infra/keys.sh create <user> [team] | list | revoke <id>
+# Usage: ./infra/keys.sh create <user> [team] | list | revoke <id> | repair-text [--apply]
 set -euo pipefail
 export MSYS_NO_PATHCONV=1
 export AWS_PAGER=""
 export AWS_DEFAULT_REGION="${AWS_REGION:-us-east-1}"
 
 usage() {
-  echo "Usage: $0 create <user> [team] | list | revoke <id>" >&2
+  echo "Usage: $0 create <user> [team] | list | revoke <id> | repair-text [--apply]" >&2
   exit 1
 }
 
@@ -24,6 +24,11 @@ case "${1:-}" in
   revoke)
     [[ "${2:-}" =~ ^[0-9]+$ ]] || usage
     ARGS="revoke-key $2"
+    ;;
+  repair-text)
+    # Fixes accents garbled before PR #22; without --apply it only reports what it would change
+    [[ -z "${2:-}" || "${2:-}" == "--apply" ]] || usage
+    ARGS="repair-text ${2:-}"
     ;;
   *)
     usage
