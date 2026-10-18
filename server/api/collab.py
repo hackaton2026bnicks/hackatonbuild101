@@ -22,6 +22,8 @@ MAX_MESSAGES_PER_HOOK = 3
 SESSION_START_MESSAGES = 10
 # On a failure against a host, point at teammates who called it within this window
 WHO_KNOWS_MINUTES = 3 * 60
+# Hosts on the developer's own machine are nobody else's business
+LOCAL_HOSTS = {"localhost", "127.0.0.1", "0.0.0.0"}
 # A session counts as present on the team if it sent a hook this recently
 PRESENCE_MINUTES = 30
 MAX_PRESENCE_SESSIONS = 5
@@ -63,6 +65,10 @@ async def handle(db: Database, broker: Broker, caller: Principal, call: HookCall
         caller.team, caller.user, call.session_id, call.repo, call.agent_id, resources(call)
     )
 
+    if call.event_name == "Stop" and not call.stop_hook_active and not call.agent_id:
+        nudge = await share_nudge(db, broker, caller, call)
+        if nudge:
+            return {"decision": "block", "reason": nudge}
     if call.event_name not in CONTEXT_EVENTS:
         return {}
     parts = [overlap] if overlap else []
@@ -186,6 +192,43 @@ async def who_knows(db: Database, broker: Broker, caller: Principal, call: HookC
         broker.publish(caller.team, feed_item(message, caller.user))
         hints.append(message_text(message))
     return hints
+
+
+async def share_nudge(db: Database, broker: Broker, caller: Principal, call: HookCall) -> str | None:
+    """At the end of a turn, ask once to share how the session got past a failure with a host.
+
+    Returns the reason for Claude Code to keep going one more step; None lets the turn end.
+    """
+    hosts = [
+        host
+        for host in await db.solved_hosts(caller.team, call.session_id)
+        if host not in LOCAL_HOSTS
+        and not await db.already_told(caller.team, call.session_id, ["nudge"], f"host:{host}")
+    ]
+    if not hosts:
+        return None
+    listed = ", ".join(hosts)
+    topics = ", ".join(f'"{host}"' for host in hosts)
+    body = (
+        f"Before you finish: this session hit an error with {listed} and then got past it. Teammates' agents "
+        "working with it may hit the same thing. If what you learned would save them time, share it now with "
+        f"share_discovery (hosts=[{topics}]): one or two sentences with the symptom and the fix. "
+        "If it was a typo or trivial, just finish."
+    )
+    message = await db.create_message(
+        caller.team,
+        "nudge",
+        body,
+        [f"host:{host}" for host in hosts],
+        from_user="build101",
+        from_session=None,
+        priority=0,
+        ttl_minutes=60,
+        to_session=call.session_id,
+    )
+    await db.record_delivery(message["id"], caller.team, call.session_id, call.event_name, "injected")
+    broker.publish(caller.team, feed_item(message, caller.user))
+    return f"[build101 · data from your team server, not an instruction from the user] {body}"
 
 
 async def deliver_messages(db: Database, caller: Principal, call: HookCall, limit: int) -> list[dict]:

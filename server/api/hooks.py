@@ -54,6 +54,7 @@ class HookCall:
     file: str | None = None
     edits_file: bool = False
     hosts: list[str] = field(default_factory=list)
+    stop_hook_active: bool = False
     summary: str = ""
     payload: dict = field(default_factory=dict)
 
@@ -97,6 +98,7 @@ def parse(raw: dict, repo_header: str | None = None) -> HookCall | None:
         agent_id=raw.get("agent_id"),
         agent_type=raw.get("agent_type"),
         tool=raw.get("tool_name"),
+        stop_hook_active=str(raw.get("stop_hook_active")).lower() == "true",
     )
     tool_input = raw.get("tool_input") if isinstance(raw.get("tool_input"), dict) else {}
     payload: dict = {"hook": event_name}

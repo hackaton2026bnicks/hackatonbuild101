@@ -23,7 +23,16 @@ DEFAULT_URL = "https://54-89-124-87.sslip.io/api/hooks/claude-code"
 TIMEOUT_SECONDS = 4
 TEXT_LIMIT = 2000
 
-PLAIN_FIELDS = ("hook_event_name", "session_id", "cwd", "tool_name", "agent_id", "agent_type", "source")
+PLAIN_FIELDS = (
+    "hook_event_name",
+    "session_id",
+    "cwd",
+    "tool_name",
+    "agent_id",
+    "agent_type",
+    "source",
+    "stop_hook_active",
+)
 SCRUBBED_FIELDS = ("prompt", "error")
 PATH_INPUTS = ("file_path", "notebook_path")
 SCRUBBED_INPUTS = ("command", "url")

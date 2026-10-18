@@ -152,6 +152,39 @@ def test_failure_on_a_host_nobody_else_used_says_nothing(client, make_key):
     assert output(failed) == {}
 
 
+def test_a_session_that_got_past_a_host_error_is_asked_once_to_share_it(client, make_key):
+    bob = make_key("bob")
+    bash(client, bob, "s-bob", BOB_REPO, "curl https://sandbox.bankx.com/oauth", event="PostToolUseFailure")
+    bash(client, bob, "s-bob", BOB_REPO, "curl -H 'X-Idem: 1' https://sandbox.bankx.com/oauth")
+
+    stop = hook(client, bob, "Stop", "s-bob", BOB_REPO)
+    assert stop["decision"] == "block"
+    assert 'share_discovery (hosts=["sandbox.bankx.com"])' in stop["reason"]
+
+    # Claude Code marks the follow-up stop; and later turns are not asked again
+    assert hook(client, bob, "Stop", "s-bob", BOB_REPO, stop_hook_active=True) == {}
+    assert hook(client, bob, "Stop", "s-bob", BOB_REPO) == {}
+
+
+def test_no_share_request_for_unsolved_shared_or_local_failures(client, make_key):
+    bob = make_key("bob")
+    bash(client, bob, "s-bob", BOB_REPO, "curl https://down.example.com", event="PostToolUseFailure")
+    bash(client, bob, "s-bob", BOB_REPO, "curl http://localhost:8000/x", event="PostToolUseFailure")
+    bash(client, bob, "s-bob", BOB_REPO, "curl http://localhost:8000/x")
+    bash(client, bob, "s-bob", BOB_REPO, "curl https://api.example.com", event="PostToolUseFailure")
+    bash(client, bob, "s-bob", BOB_REPO, "curl https://api.example.com")
+    client.post(
+        "/messages",
+        json={
+            "body": "api.example.com needs a trailing slash",
+            "topics": ["host:api.example.com"],
+            "session_id": "s-bob",
+        },
+        headers=bob,
+    )
+    assert hook(client, bob, "Stop", "s-bob", BOB_REPO) == {}
+
+
 def test_discovery_reaches_a_session_that_starts_later(client, make_key):
     ana, bob = make_key("ana"), make_key("bob")
     client.post(

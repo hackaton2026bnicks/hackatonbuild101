@@ -254,6 +254,29 @@ class Database:
             )
             return await cur.fetchone() is not None
 
+    async def solved_hosts(self, team: str, session_id: str) -> list[str]:
+        """Hosts this session failed against, then called successfully, and shared nothing about."""
+        async with self.pool.connection() as conn:
+            cur = await conn.execute(
+                """
+                SELECT DISTINCT h.host
+                FROM events f, jsonb_array_elements_text(f.payload -> 'hosts') AS h(host)
+                WHERE f.team = %(team)s AND f.session_id = %(session)s AND f.payload ->> 'hook' = 'PostToolUseFailure'
+                  AND EXISTS (
+                      SELECT 1 FROM events ok
+                      WHERE ok.team = f.team AND ok.session_id = f.session_id AND ok.id > f.id
+                        AND ok.payload ->> 'hook' = 'PostToolUse' AND ok.payload -> 'hosts' ? h.host)
+                  AND NOT EXISTS (
+                      SELECT 1 FROM messages m
+                      WHERE m.team = f.team AND m.from_session = f.session_id
+                        AND m.kind IN ('discovery', 'alert', 'note', 'answer')
+                        AND 'host:' || h.host = ANY (m.topics))
+                ORDER BY h.host
+                """,
+                {"team": team, "session": session_id},
+            )
+            return [row["host"] for row in await cur.fetchall()]
+
     async def recent_host_users(self, team: str, host: str, session_id: str, minutes: int) -> list[dict]:
         """Other sessions that called this host lately, most recent first."""
         async with self.pool.connection() as conn:
