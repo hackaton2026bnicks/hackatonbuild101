@@ -47,29 +47,36 @@ def test_hook_requires_a_key(client):
     assert response.status_code == 401
 
 
-def test_second_session_editing_the_same_file_is_stopped_once(client, make_key):
+def test_editing_a_file_another_session_is_on_tells_both_and_blocks_nothing(client, make_key):
     ana, bob = make_key("ana"), make_key("bob")
     hook(client, ana, "UserPromptSubmit", "s-ana", ANA_REPO, prompt="add idempotency to payments")
     assert output(edit(client, ana, "s-ana", ANA_REPO, "api/client.py")) == {}
+    hook(client, bob, "UserPromptSubmit", "s-bob", BOB_REPO, prompt="retry failed payouts")
 
     first = output(edit(client, bob, "s-bob", BOB_REPO, "api/client.py"))
-    assert first["permissionDecision"] == "deny"
-    assert "ana's agent edited api/client.py" in first["permissionDecisionReason"]
-    assert "add idempotency to payments" in first["permissionDecisionReason"]
+    assert "permissionDecision" not in first
+    assert "ana's agent edited api/client.py" in first["additionalContext"]
+    assert "add idempotency to payments" in first["additionalContext"]
+    assert "share_discovery" in first["additionalContext"]
 
-    retry = output(edit(client, bob, "s-bob", BOB_REPO, "api/client.py"))
-    assert "permissionDecision" not in retry
+    told = output(bash(client, ana, "s-ana", ANA_REPO, "ls"))["additionalContext"]
+    assert "bob's agent just started editing api/client.py too" in told
+    assert "retry failed payouts" in told
+
+    # Once per pair and file, in either direction
+    assert output(edit(client, bob, "s-bob", BOB_REPO, "api/client.py")) == {}
+    assert output(edit(client, ana, "s-ana", ANA_REPO, "api/client.py")) == {}
 
 
-def test_no_conflict_with_own_session_other_files_or_ended_sessions(client, make_key):
+def test_no_overlap_with_own_session_other_files_or_ended_sessions(client, make_key):
     ana, bob = make_key("ana"), make_key("bob")
     edit(client, ana, "s-ana", ANA_REPO, "api/client.py")
 
-    assert "permissionDecision" not in output(edit(client, ana, "s-ana", ANA_REPO, "api/client.py"))
-    assert "permissionDecision" not in output(edit(client, bob, "s-bob", BOB_REPO, "api/other.py"))
+    assert output(edit(client, ana, "s-ana", ANA_REPO, "api/client.py")) == {}
+    assert output(edit(client, bob, "s-bob", BOB_REPO, "api/other.py")) == {}
 
     hook(client, ana, "SessionEnd", "s-ana", ANA_REPO)
-    assert "permissionDecision" not in output(edit(client, bob, "s-bob2", BOB_REPO, "api/client.py"))
+    assert output(edit(client, bob, "s-bob2", BOB_REPO, "api/client.py")) == {}
 
 
 def test_discovery_reaches_sessions_using_that_host_once(client, make_key):
@@ -105,6 +112,21 @@ def test_discovery_reaches_a_session_that_starts_later(client, make_key):
 
     started = output(hook(client, bob, "SessionStart", "s-new", BOB_REPO, source="startup"))
     assert "Use the v2 refund endpoint." in started["additionalContext"]
+
+
+def test_new_session_catches_up_on_the_latest_ten_messages(client, make_key):
+    ana, bob = make_key("ana"), make_key("bob")
+    for n in range(12):
+        client.post("/messages", json={"body": f"finding {n}", "topics": ["repo:payments"]}, headers=ana)
+
+    context = output(hook(client, bob, "SessionStart", "s-bob", BOB_REPO, source="startup"))[
+        "additionalContext"
+    ]
+    assert "latest 10 from your team" in context
+    assert "- discovery from ana, just now: finding 11" in context
+    assert "finding 1\n" not in context and not context.endswith("finding 1")
+    # The rest arrive later, a few per hook
+    assert "finding 1" in output(bash(client, bob, "s-bob", BOB_REPO, "ls"))["additionalContext"]
 
 
 def test_holdout_deliveries_are_recorded_but_not_injected(client, make_key, monkeypatch):

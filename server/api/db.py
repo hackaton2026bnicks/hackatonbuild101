@@ -239,17 +239,28 @@ class Database:
             )
             return await cur.fetchone()
 
-    async def conflict_warned(self, team: str, session_id: str, file: str) -> bool:
+    async def overlap_noticed(self, team: str, session_id: str, file: str) -> bool:
+        """Whether this session was already told about an overlap on this file, delivered or still pending."""
         async with self.pool.connection() as conn:
             cur = await conn.execute(
                 """
-                SELECT 1 FROM deliveries d JOIN messages m ON m.id = d.message_id
-                WHERE d.team = %s AND d.session_id = %s AND m.kind = 'conflict' AND %s = ANY (m.topics)
+                SELECT 1 FROM messages m
+                WHERE m.team = %s AND m.kind IN ('overlap', 'conflict') AND %s = ANY (m.topics)
+                  AND (m.to_session = %s
+                       OR EXISTS (SELECT 1 FROM deliveries d WHERE d.message_id = m.id AND d.session_id = %s))
                 LIMIT 1
                 """,
-                (team, session_id, f"file:{file}"),
+                (team, f"file:{file}", session_id, session_id),
             )
             return await cur.fetchone() is not None
+
+    async def session_intent(self, team: str, session_id: str) -> str | None:
+        async with self.pool.connection() as conn:
+            cur = await conn.execute(
+                "SELECT intent FROM sessions WHERE team = %s AND session_id = %s", (team, session_id)
+            )
+            row = await cur.fetchone()
+            return row["intent"] if row else None
 
     async def create_message(
         self,
@@ -299,7 +310,7 @@ class Database:
                 SELECT m.id, m.kind, m.body, m.from_user, m.created_at, m.reply_to
                 FROM messages m
                 WHERE m.team = %s
-                  AND m.kind IN ('discovery', 'alert', 'note', 'question', 'answer')
+                  AND m.kind IN ('discovery', 'alert', 'note', 'question', 'answer', 'overlap')
                   AND m.expires_at > now()
                   AND m.from_session IS DISTINCT FROM %s
                   AND (m.to_session = %s
