@@ -17,10 +17,11 @@ from __future__ import annotations
 
 import argparse
 import json
-import os
 import re
 import sys
 from datetime import datetime
+
+from insights_paths import local_path
 
 METODO = "dik-insights-1"
 TIPOS = {"skill", "tool", "subagente", "mcp", "hook", "regla", "app", "adoptar"}
@@ -106,6 +107,50 @@ def check_hallazgos(h: dict) -> list[str]:
     return errs
 
 
+TARJETA = [
+    ("sesiones", "Sesiones"),
+    ("horas_activas", "H · horas activas"),
+    ("L_apalancamiento", "L · acciones de Claude por pedido"),
+    ("K_capitalizacion", "K · capitalización"),
+    ("F_friccion", "F · fricción cada 100 acciones"),
+    ("R_resueltas", "R · resueltas"),
+    ("C_mtokens_por_sesion", "C · millones de tokens por sesión (mediana)"),
+]
+
+
+def cell(value) -> str:
+    return "—" if value is None else " ".join(str(value).split()).replace("|", "/")
+
+
+def to_markdown(out: dict) -> str:
+    """El mismo resultado, para leer o pegar donde no entra un JSON."""
+    p = out["periodo"]
+    lines = [f"# Uso de Claude: {out['persona']}", ""]
+    lines += [f"{p['desde']} a {p['hasta']} · método {out['metodo']}", ""]
+    lines += ["| | |", "|---|---|"]
+    lines += [f"| {label} | {cell(out['tarjeta'].get(k))} |" for k, label in TARJETA]
+    if out.get("tesis"):
+        lines += ["", "## Tesis", ""] + [f"{i}. {cell(t)}" for i, t in enumerate(out["tesis"], 1)]
+    if out.get("oportunidades"):
+        lines += ["", "## Oportunidades", "", "| Tema | Qué | Tipo | Sesiones | Horas | O | Evidencia |"]
+        lines.append("|---|---|---|---|---|---|---|")
+        for o in sorted(out["oportunidades"], key=lambda o: -float(o.get("O") or 0)):
+            row = [o.get(k, "") for k in ("tema", "que", "tipo", "sesiones", "horas", "O", "evidencia")]
+            lines.append("| " + " | ".join(cell(v) for v in row) + " |")
+    if out.get("estrellas"):
+        lines += ["", "## Sesiones estrella", ""]
+        for e in out["estrellas"]:
+            head = f"- **{cell(e['titulo'])}** ({e['trabajo']})"
+            lines.append(f"{head}: {cell(e['como'])} _{cell(e['evidencia'])}_")
+    if out.get("riesgos"):
+        lines += ["", "## Riesgos", ""]
+        lines += [f"- {cell(r['que'])} → {cell(r['accion'])}" for r in out["riesgos"]]
+    if out.get("compartible"):
+        lines += ["", "## Para compartir", ""]
+        lines += [f"- {cell(c['que'])} ({c['tipo']}, {cell(c['donde'])})" for c in out["compartible"]]
+    return "\n".join(lines) + "\n"
+
+
 def main():
     ap = argparse.ArgumentParser()
     ap.add_argument("--persona", required=True, help="nombre corto, minúsculas: alberto, nico")
@@ -113,16 +158,17 @@ def main():
     ap.add_argument("--insights", required=True)
     ap.add_argument("--hallazgos", required=True)
     ap.add_argument("--out", required=True)
+    ap.add_argument("--md", help="además, el resultado en Markdown en esta ruta")
     a = ap.parse_args()
 
     persona = a.persona.strip().lower()
     if not re.fullmatch(r"[a-z0-9][a-z0-9_-]{0,30}", persona):
         sys.exit("--persona: minúsculas, números, - o _")
-    with open(os.path.expanduser(a.facts)) as fh:
+    with open(local_path(a.facts), encoding="utf-8") as fh:
         starts = sorted(json.loads(line)["start"][:10] for line in fh if line.strip())
-    with open(os.path.expanduser(a.insights)) as fh:
+    with open(local_path(a.insights), encoding="utf-8") as fh:
         ins = json.load(fh)
-    with open(os.path.expanduser(a.hallazgos)) as fh:
+    with open(local_path(a.hallazgos), encoding="utf-8") as fh:
         hall = json.load(fh)
 
     errs = check_hallazgos(hall)
@@ -158,8 +204,11 @@ def main():
     body = json.dumps(out, ensure_ascii=False, indent=1)
     if len(body.encode()) > 200_000:
         sys.exit("resultado.json pasa de 200 KB: recortá hallazgos")
-    with open(os.path.expanduser(a.out), "w") as fh:
+    with open(local_path(a.out), "w", encoding="utf-8") as fh:
         fh.write(body)
+    if a.md:
+        with open(local_path(a.md), "w", encoding="utf-8") as fh:
+            fh.write(to_markdown(out))
     print(
         f"{a.out}: {out['tarjeta']['sesiones']} sesiones, {len(out['oportunidades'])} oportunidades, "
         f"{n[0]} reemplazos de datos sensibles"

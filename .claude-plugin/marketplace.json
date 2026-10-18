@@ -1,0 +1,11 @@
+{
+  "name": "build101",
+  "owner": { "name": "build101" },
+  "plugins": [
+    {
+      "name": "build101",
+      "source": "./plugin",
+      "description": "Skills del equipo de build101: /insights para analizar tus sesiones de Claude y sumarlas al equipo."
+    }
+  ]
+}
