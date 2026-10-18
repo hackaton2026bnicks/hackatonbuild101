@@ -107,9 +107,14 @@ def post(request, urlopen=urllib.request.urlopen, sleep=time.sleep):
     return None
 
 
+def read_stdin_json(stdin=None):
+    """Claude Code writes UTF-8; on Windows sys.stdin decodes cp1252 and turns á into Ã¡."""
+    return json.loads((stdin or sys.stdin).buffer.read().decode("utf-8"))
+
+
 def main() -> None:
     try:
-        raw = json.load(sys.stdin)
+        raw = read_stdin_json()
         key = os.environ.get("BUILD101_KEY")
         if not key or not isinstance(raw, dict):
             return
