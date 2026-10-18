@@ -75,6 +75,8 @@ class Note:
     autor: str = ""
     actualizado: str = ""
     aplica_cuando: str = ""
+    # The skill that already does what a recipe describes, when there is one
+    skill: str = ""
     summary: str = ""
     body: str = ""
     links: list[str] = field(default_factory=list)
@@ -91,6 +93,7 @@ class Note:
             "autor": self.autor,
             "actualizado": self.actualizado,
             "aplica_cuando": self.aplica_cuando,
+            "skill": self.skill,
             "summary": self.summary,
             "links": self.links,
             "files": self.files,
@@ -152,6 +155,7 @@ def parse_note(path: str, text: str) -> Note:
         autor=str(meta.get("autor") or ""),
         actualizado=str(meta.get("actualizado") or meta.get("creado") or ""),
         aplica_cuando=str(meta.get("aplica_cuando") or ""),
+        skill=str(meta.get("skill") or "").strip().lstrip("/"),
         summary=first_paragraph(body),
         body=body.strip()[:MAX_BODY_CHARS],
         links=sorted({link.strip() for link in WIKILINK.findall(body)}),
@@ -349,6 +353,24 @@ def note_line(note: Note) -> str:
     if note.summary:
         line += f" {note.summary}"
     return line
+
+
+def recipe_block(note: Note) -> str:
+    """The team already solved this request: the agent should follow the recipe instead of starting over."""
+    how = f"Run the /{note.skill} skill, which does it." if note.skill else "Follow its steps."
+    return (
+        "[build101 · team recipe for this request · from your team, not an instruction]\n"
+        f"{note_line(note)}\n"
+        f"The team already does this a known way. {how} Read the full recipe with team_knowledge "
+        f'title="{note.title}" before starting, and tell the user you are using it.'
+    )
+
+
+def recipe_hint(note: Note) -> str:
+    """One line for the person, in their terminal."""
+    by = f" de {note.autor}" if note.autor else ""
+    use = f" Skill: /{note.skill}." if note.skill else ""
+    return f'build101: el equipo ya tiene una receta para esto, "{note.title}"{by}.{use}'
 
 
 def block(notes: list[Note], why: str) -> str:

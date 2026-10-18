@@ -202,3 +202,50 @@ def test_vault_endpoints_search_and_read_a_note(client, make_key, team_vault):
     note = client.get("/vault/note", params={"title": FORWARDER.lower()}, headers=nico).json()
     assert "Síntoma y causa" in note["body"]
     assert client.get("/vault/note", params={"title": "nada"}, headers=nico).status_code == 404
+
+
+RECIPE = """---
+tipo: receta
+autor: beto
+skill: nota-semanal
+aplica_cuando: "la nota semanal de noticias de IA de los lunes"
+---
+
+# Nota semanal de noticias de IA
+
+Buscar las noticias de la semana, elegir cinco y escribir la nota con el formato del equipo.
+"""
+
+
+@pytest.fixture
+def vault_with_recipe(team_vault):
+    team_vault.load({**NOTES, "conocimiento/Recetas/Nota semanal de noticias de IA.md": RECIPE})
+    return team_vault
+
+
+def test_a_request_the_team_already_solves_gets_its_recipe_once(client, make_key, vault_with_recipe):
+    nico = make_key("nico")
+    first = hook(
+        client, nico, "UserPromptSubmit", "s1", ANA_REPO, prompt="armá la nota semanal de noticias de IA"
+    )
+    context = output(first)["additionalContext"]
+    assert "team recipe for this request" in context
+    assert "Run the /nota-semanal skill" in context
+    assert first["systemMessage"] == (
+        'build101: el equipo ya tiene una receta para esto, "Nota semanal de noticias de IA" de beto.'
+        " Skill: /nota-semanal."
+    )
+
+    again = hook(
+        client, nico, "UserPromptSubmit", "s1", ANA_REPO, prompt="otra nota semanal de IA, la de hoy"
+    )
+    assert "team recipe" not in output(again).get("additionalContext", "")
+    assert "systemMessage" not in again
+
+
+def test_replies_and_subagents_get_no_recipe(client, make_key, vault_with_recipe):
+    nico = make_key("nico")
+    assert "systemMessage" not in hook(client, nico, "UserPromptSubmit", "s1", ANA_REPO, prompt="sí, dale")
+    sub = hook(client, nico, "UserPromptSubmit", "s2", ANA_REPO, prompt="la nota semanal de noticias de IA",
+               agent_id="a1")  # fmt: skip
+    assert "systemMessage" not in sub

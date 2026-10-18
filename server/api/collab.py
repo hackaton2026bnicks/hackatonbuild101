@@ -15,7 +15,7 @@ from api.broker import Broker
 from api.db import Database
 from api.hooks import CONTEXT_EVENTS, HookCall
 from api.models import Event, states_a_task
-from api.vault import Vault
+from api.vault import Vault, recipe_block, recipe_hint
 from api.vault import block as vault_block
 
 OVERLAP_WINDOW_MINUTES = 15
@@ -35,6 +35,8 @@ SHARED_CHECKOUT_MINUTES = 30
 MAX_PRESENCE_SESSIONS = 5
 # Share of discovery deliveries that are recorded but not injected, to measure the effect honestly
 HOLDOUT_PERCENT = 10
+# On a request, recipes are offered on their own (one per session); the other lessons go with them
+NOT_RECIPES = ("gotcha", "decision", "criterio", "recurso", "componente")
 
 
 def in_holdout(message_id: int, session_id: str) -> bool:
@@ -101,9 +103,10 @@ async def handle(
             if brief:
                 parts.append(brief)
         parts.extend(message_text(m) for m in await deliver_messages(db, caller, call, MAX_MESSAGES_PER_HOOK))
-    knowledge = await vault_context(db, vault, caller, call)
-    if knowledge:
-        parts.append(knowledge)
+    knowledge, hint = await vault_context(db, vault, caller, call)
+    parts.extend(knowledge)
+    if hint:
+        to_user = f"{to_user}\n{hint}" if to_user else hint
     return respond(call, context="\n\n".join(parts), to_user=to_user) if parts else {}
 
 
@@ -113,7 +116,8 @@ def vault_matches(vault: Vault, call: HookCall) -> tuple[list, str]:
         return vault.rules(), f"how the team works ({len(vault.notes)} notes, more arrive when they apply)"
     if call.event_name == "UserPromptSubmit":
         prompt = call.payload.get("prompt") or ""
-        return (vault.for_text(prompt), "for this request") if states_a_task(prompt) else ([], "")
+        found = vault.for_text(prompt, types=NOT_RECIPES) if states_a_task(prompt) else []
+        return found, "for this request"
     if call.event_name == "PreToolUse" and call.file:
         return vault.for_file(call.file), f"about {call.file}"
     if call.event_name == "PostToolUseFailure" and call.payload.get("error"):
@@ -122,26 +126,55 @@ def vault_matches(vault: Vault, call: HookCall) -> tuple[list, str]:
     return [], ""
 
 
-async def vault_context(db: Database, vault: Vault | None, caller: Principal, call: HookCall) -> str | None:
-    """Team vault notes the session has not seen, at the moment they apply (docs/PLAN-EQUIPO.md, 1)."""
+async def vault_context(
+    db: Database, vault: Vault | None, caller: Principal, call: HookCall
+) -> tuple[list[str], str | None]:
+    """Team vault notes the session has not seen, at the moment they apply (docs/PLAN-EQUIPO.md, 1), and
+    on a request the team already solves a known way, its recipe, with a line for the person (objective 5).
+    """
     if not vault or not vault.notes:
-        return None
+        return [], None
     notes, why = vault_matches(vault, call)
-    if not notes:
+    recipe = await recipe_for(db, vault, caller, call)
+    if not notes and not recipe:
+        return [], None
+    seen = await db.vault_notes_seen(caller.team, call.session_id)
+    texts, hint = [], None
+    shown = await deliver_notes(db, caller, call, [n for n in notes if n.title not in seen])
+    if shown:
+        texts.append(vault_block(shown, why))
+    if recipe and await deliver_notes(db, caller, call, [recipe]):
+        texts.append(recipe_block(recipe))
+        hint = recipe_hint(recipe)
+    return texts, hint
+
+
+async def recipe_for(db: Database, vault: Vault, caller: Principal, call: HookCall):
+    """The recipe that matches a real request, if this session was not offered one yet: one per session."""
+    prompt = call.payload.get("prompt") or ""
+    if call.event_name != "UserPromptSubmit" or call.agent_id or not states_a_task(prompt):
+        return None
+    found = vault.for_text(prompt, types=("receta",), limit=1)
+    if not found:
         return None
     seen = await db.vault_notes_seen(caller.team, call.session_id)
+    if any(vault.notes.get(title) and vault.notes[title].tipo == "receta" for title in seen):
+        return None
+    return found[0]
+
+
+async def deliver_notes(db: Database, caller: Principal, call: HookCall, notes: list) -> list:
+    """Record notes as handed to the session and return the ones to inject (holdout ones are left out)."""
     shown = []
     for note in notes:
-        if note.title in seen:
-            continue
         held_out = in_holdout_key(f"vault:{note.title}", call.session_id)
-        outcome = "holdout" if held_out else "injected"
         await db.record_vault_delivery(
-            caller.team, call.session_id, caller.user, note.title, call.event_name, outcome
-        )
+            caller.team, call.session_id, caller.user, note.title, call.event_name,
+            "holdout" if held_out else "injected",
+        )  # fmt: skip
         if not held_out:
             shown.append(note)
-    return vault_block(shown, why) if shown else None
+    return shown
 
 
 async def check_shared_checkout(
