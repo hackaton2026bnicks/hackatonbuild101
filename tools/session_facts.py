@@ -24,8 +24,10 @@ import re
 import shlex
 from datetime import datetime
 
+from insights_paths import local_path
+
 PROJECTS = os.path.expanduser("~/.claude/projects")
-INSIGHTS_DIR = os.path.expanduser(os.environ.get("BUILD101_INSIGHTS_DIR", "~/.claude/session-insights"))
+INSIGHTS_DIR = local_path(os.environ.get("BUILD101_INSIGHTS_DIR", "~/.claude/session-insights"))
 IDLE_GAP_S = 300  # un hueco mayor a 5 min no cuenta como tiempo activo
 
 CORRECTION_RE = re.compile(
@@ -57,8 +59,9 @@ def parse_ts(s):
 def repo_of(cwd: str) -> str:
     if not cwd:
         return "?"
-    cwd = re.sub(r"/\.claude/worktrees/[^/]+.*$", "", cwd)
-    home = os.path.expanduser("~")
+    # En Windows las rutas vienen con \\ y el home también
+    cwd = re.sub(r"/\.claude/worktrees/[^/]+.*$", "", cwd.replace("\\", "/"))
+    home = os.path.expanduser("~").replace("\\", "/")
     rel = cwd[len(home) + 1 :] if cwd.startswith(home) else cwd
     parts = rel.split("/")
     if parts and parts[0] in ("repos", "agents") and len(parts) > 1:
@@ -218,7 +221,7 @@ def tool_result_text(b: dict) -> str:
 
 def scan_file(path: str):
     """Itera lineas JSON validas."""
-    with open(path, errors="replace") as fh:
+    with open(path, errors="replace", encoding="utf-8") as fh:
         for line in fh:
             try:
                 yield json.loads(line)
@@ -254,7 +257,7 @@ def subagent_facts(session_dir: str):
         meta = p[:-6] + ".meta.json"
         if os.path.exists(meta):
             try:
-                out["types"][json.load(open(meta)).get("agentType", "?")] += 1
+                out["types"][json.load(open(meta, encoding="utf-8")).get("agentType", "?")] += 1
             except Exception:
                 pass
     return out
@@ -499,11 +502,13 @@ def main():
     # facts.jsonl lo llena el hook SessionEnd y no se reescribe: Claude Code borra los transcripts viejos
     ap.add_argument("--out", help="por defecto facts_baseline.jsonl, o facts.jsonl con --session")
     ap.add_argument("--since", help="YYYY-MM-DD, solo sesiones que empezaron desde esa fecha")
-    ap.add_argument("--user", default=os.environ.get("USER", "me"))
+    ap.add_argument("--user", default=os.environ.get("USER") or os.environ.get("USERNAME", "me"))
     ap.add_argument("--share", action="store_true", help="sin texto: solo conteos y tokens canonicos")
     ap.add_argument("--session", action="append", help="solo esa sesion, repetible; agrega al final de --out")
     a = ap.parse_args()
-    a.out = a.out or os.path.join(INSIGHTS_DIR, "facts.jsonl" if a.session else "facts_baseline.jsonl")
+    default_out = os.path.join(INSIGHTS_DIR, "facts.jsonl" if a.session else "facts_baseline.jsonl")
+    a.out = local_path(a.out) if a.out else default_out
+    a.projects = local_path(a.projects)
 
     os.makedirs(os.path.dirname(os.path.abspath(a.out)), exist_ok=True)
     if a.session:
@@ -514,7 +519,7 @@ def main():
     else:
         paths = sorted(glob.glob(os.path.join(a.projects, "*", "*.jsonl")), key=os.path.getmtime)
     n = 0
-    with open(a.out, "a" if a.session else "w") as out:
+    with open(a.out, "a" if a.session else "w", encoding="utf-8") as out:
         for path in paths:
             f = facts_for(path, a.user, share=a.share)
             if not f or (a.since and f["start"][:10] < a.since):

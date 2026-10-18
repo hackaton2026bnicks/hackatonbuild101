@@ -23,6 +23,8 @@ import re
 import statistics as st
 from datetime import datetime, timedelta, timezone
 
+from insights_paths import local_path
+
 TZ = timezone(timedelta(hours=-3))
 
 # --- Clasificación de cada acción en tres niveles ------------------------------------------
@@ -427,8 +429,8 @@ def load(patterns: list[str]) -> list[dict]:
     rows = []
     for pat in patterns:
         # Del archivo más viejo al más nuevo: la medición más reciente de una sesión manda
-        for p in sorted(glob.glob(os.path.expanduser(pat)), key=os.path.getmtime):
-            with open(p) as fh:
+        for p in sorted(glob.glob(local_path(pat)), key=os.path.getmtime):
+            with open(p, encoding="utf-8") as fh:
                 rows += [json.loads(line) for line in fh if line.strip()]
     return rows
 
@@ -510,7 +512,7 @@ def main():
         "oportunidades": opportunities(rows, cards) if cards else [],
         "fichas": card_aggregates(rows, cards) if cards else {},
     }
-    with open(a.out, "w") as fh:
+    with open(a.out, "w", encoding="utf-8") as fh:
         json.dump(out, fh, ensure_ascii=False, indent=1)
 
     t = out["total"]

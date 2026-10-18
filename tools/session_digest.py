@@ -17,6 +17,8 @@ import json
 import os
 import re
 
+from insights_paths import local_path
+
 GENERIC = re.compile(
     r"^(read\(|edit\(|write\(|bash:(grep|sed|cat|ls|head|tail|wc|find|for|mkdir|echo|awk|cp|rm|mv|sleep|date|printf|shell)|ToolSearch|Task|mcp:ccd_)"
 )
@@ -81,22 +83,22 @@ def main():
         import glob
 
         for pat in a.skip.split(","):
-            for path in glob.glob(os.path.expanduser(pat)):
-                with open(path) as fh:
+            for path in glob.glob(local_path(pat)):
+                with open(path, encoding="utf-8") as fh:
                     done |= {json.loads(line)["session_id"] for line in fh if line.strip()}
 
-    with open(os.path.expanduser(a.facts)) as fh:
+    with open(local_path(a.facts), encoding="utf-8") as fh:
         rows = [json.loads(line) for line in fh if line.strip()]
     if rows and rows[0].get("prompts") is None:
         raise SystemExit("facts.jsonl está en modo --share: generalo sin --share para armar los lotes")
     rows = sorted((r for r in rows if r["session_id"] not in done), key=lambda r: r["start"])
 
-    out = os.path.expanduser(a.out_dir)
+    out = local_path(a.out_dir)
     os.makedirs(out, exist_ok=True)
     n = 0
     for i in range(0, len(rows), a.size):
         path = os.path.join(out, f"batch_{i // a.size}.jsonl")
-        with open(path, "w") as fh:
+        with open(path, "w", encoding="utf-8") as fh:
             for r in rows[i : i + a.size]:
                 fh.write(json.dumps(digest(r), ensure_ascii=False) + "\n")
         n += 1
