@@ -77,3 +77,62 @@ def test_paths_are_relative_to_the_project_even_after_cd():
     sent = forward.sanitize(raw, {"CLAUDE_PROJECT_DIR": "/home/ana/payments"})
     assert sent["cwd"] == "/home/ana/payments"
     assert forward.sanitize(raw, {})["cwd"] == "/home/ana/payments/server"
+
+
+class FakeResponse:
+    def __init__(self, body: bytes):
+        self.body = body
+
+    def __enter__(self):
+        return self
+
+    def __exit__(self, *exc):
+        return False
+
+    def read(self):
+        return self.body
+
+
+def fake_urlopen(*outcomes):
+    calls = []
+
+    def urlopen(request, timeout):
+        outcome = outcomes[len(calls)]
+        calls.append(timeout)
+        if isinstance(outcome, Exception):
+            raise outcome
+        return FakeResponse(outcome)
+
+    return urlopen, calls
+
+
+def restarting(code=502):
+    import urllib.error
+
+    return urllib.error.HTTPError("https://x", code, "Bad Gateway", {}, None)
+
+
+def test_a_restarting_server_gets_one_retry():
+    urlopen, calls = fake_urlopen(restarting(), b'{"ok": 1}')
+    assert forward.post("req", urlopen=urlopen, sleep=lambda s: None) == {"ok": 1}
+    assert len(calls) == 2
+
+    import urllib.error
+
+    urlopen, calls = fake_urlopen(urllib.error.URLError(ConnectionRefusedError()), b"{}")
+    assert forward.post("req", urlopen=urlopen, sleep=lambda s: None) == {}
+    assert len(calls) == 2
+
+
+def test_timeouts_and_other_errors_are_not_retried():
+    import urllib.error
+
+    for failure in (TimeoutError(), urllib.error.URLError(TimeoutError()), restarting(401), restarting(500)):
+        urlopen, calls = fake_urlopen(failure, b"{}")
+        assert forward.post("req", urlopen=urlopen, sleep=lambda s: None) is None
+        assert len(calls) == 1
+
+    urlopen, calls = fake_urlopen(restarting(), restarting())
+    assert forward.post("req", urlopen=urlopen, sleep=lambda s: None) is None
+    assert len(calls) == 2
+    assert urllib.error  # imported for the failure types above

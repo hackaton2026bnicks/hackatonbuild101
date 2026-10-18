@@ -11,7 +11,10 @@ Environment:   BUILD101_KEY (required), BUILD101_URL (optional), BUILD101_REPO (
 import json
 import os
 import re
+import socket
 import sys
+import time
+import urllib.error
 import urllib.request
 from pathlib import Path
 
@@ -21,6 +24,11 @@ from api.scrub import scrub  # noqa: E402
 
 DEFAULT_URL = "https://54-89-124-87.sslip.io/api/hooks/claude-code"
 TIMEOUT_SECONDS = 4
+# The API restarts on every deploy; one quick retry keeps SessionEnd and Stop from being lost
+RETRY_AFTER_SECONDS = 1
+RESTARTING_STATUSES = {502, 503, 504}
+# socket.timeout only became an alias of TimeoutError in Python 3.10; macOS ships 3.9
+TIMEOUTS = (socket.timeout, TimeoutError)
 TEXT_LIMIT = 2000
 
 PLAIN_FIELDS = (
@@ -76,6 +84,25 @@ def sanitize(raw: dict, environ: dict) -> dict:
     return out
 
 
+def post(request, urlopen=urllib.request.urlopen, sleep=time.sleep):
+    """Send once, and once more if the server looks like it is restarting. Timeouts are not retried,
+    so a server that is really down never costs the agent more than one timeout."""
+    for attempt in range(2):
+        try:
+            with urlopen(request, timeout=TIMEOUT_SECONDS) as response:
+                return json.loads(response.read() or b"{}")
+        except urllib.error.HTTPError as error:
+            if error.code not in RESTARTING_STATUSES or attempt:
+                return None
+        except TIMEOUTS:
+            return None
+        except (urllib.error.URLError, ConnectionError) as error:
+            if attempt or isinstance(getattr(error, "reason", None), TIMEOUTS):
+                return None
+        sleep(RETRY_AFTER_SECONDS)
+    return None
+
+
 def main() -> None:
     try:
         raw = json.load(sys.stdin)
@@ -91,8 +118,7 @@ def main() -> None:
             headers=headers,
             method="POST",
         )
-        with urllib.request.urlopen(request, timeout=TIMEOUT_SECONDS) as response:
-            answer = json.loads(response.read() or b"{}")
+        answer = post(request)
         if isinstance(answer, dict) and answer:
             print(json.dumps(answer))
     except Exception:
