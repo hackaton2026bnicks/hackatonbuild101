@@ -98,3 +98,15 @@ def test_two_agents_share_ask_and_answer_through_the_tools(client, make_key, via
     assert not is_error
     answered = output(bash(client, bob, "s-bob", BOB_REPO, "ls"))["additionalContext"]
     assert "answer from ana" in answered and "test-02" in answered
+
+
+def test_mcp_reads_utf8_messages_even_when_the_console_is_cp1252(monkeypatch):
+    import io
+    import json
+
+    line = json.dumps({"jsonrpc": "2.0", "id": 1, "text": "análisis"}, ensure_ascii=False) + "\n"
+    monkeypatch.setattr(sys, "stdin", io.TextIOWrapper(io.BytesIO(line.encode("utf-8")), encoding="cp1252"))
+    seen = []
+    monkeypatch.setattr(mcp, "handle", lambda message, environ: seen.append(message))
+    mcp.main()
+    assert seen[0]["text"] == "análisis"

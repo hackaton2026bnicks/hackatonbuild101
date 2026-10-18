@@ -117,7 +117,8 @@ def main() -> None:
             log_error(insights_dir(os.environ), session_id, f"facts: {error!r}")
         return
     try:
-        raw = json.load(sys.stdin)
+        # Claude Code writes UTF-8; on Windows sys.stdin decodes cp1252 and turns á into Ã¡
+        raw = json.loads(sys.stdin.buffer.read().decode("utf-8"))
         if isinstance(raw, dict):
             start_worker(raw, os.environ)
     except Exception:
