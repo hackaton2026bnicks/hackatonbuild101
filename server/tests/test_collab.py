@@ -104,6 +104,54 @@ def test_discovery_reaches_sessions_using_that_host_once(client, make_key):
     assert output(bash(client, eve, "s-eve", "/home/eve/frontend", "ls")) == {}
 
 
+def test_failure_on_a_host_points_at_teammates_who_used_it(client, make_key):
+    ana, bob = make_key("ana"), make_key("bob")
+    hook(client, ana, "UserPromptSubmit", "s-ana", ANA_REPO, prompt="refunds against the sandbox")
+    bash(client, ana, "s-ana", ANA_REPO, "curl https://sandbox.bankx.com/refunds")
+
+    failed = hook(
+        client,
+        bob,
+        "PostToolUseFailure",
+        "s-bob",
+        BOB_REPO,
+        tool_name="Bash",
+        tool_input={"command": "curl https://sandbox.bankx.com/oauth"},
+        error="HTTP 401",
+    )
+    context = output(failed)["additionalContext"]
+    assert "Teammates worked with sandbox.bankx.com recently: ana (just now" in context
+    assert "refunds against the sandbox" in context
+    assert 'ask_team (hosts=["sandbox.bankx.com"])' in context
+
+    again = hook(
+        client,
+        bob,
+        "PostToolUseFailure",
+        "s-bob",
+        BOB_REPO,
+        tool_name="Bash",
+        tool_input={"command": "curl https://sandbox.bankx.com/oauth"},
+        error="HTTP 401",
+    )
+    assert output(again) == {}
+
+
+def test_failure_on_a_host_nobody_else_used_says_nothing(client, make_key):
+    bob = make_key("bob")
+    failed = hook(
+        client,
+        bob,
+        "PostToolUseFailure",
+        "s-bob",
+        BOB_REPO,
+        tool_name="Bash",
+        tool_input={"command": "curl https://lonely.example.com"},
+        error="HTTP 500",
+    )
+    assert output(failed) == {}
+
+
 def test_discovery_reaches_a_session_that_starts_later(client, make_key):
     ana, bob = make_key("ana"), make_key("bob")
     client.post(

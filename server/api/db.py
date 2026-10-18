@@ -239,20 +239,37 @@ class Database:
             )
             return await cur.fetchone()
 
-    async def overlap_noticed(self, team: str, session_id: str, file: str) -> bool:
-        """Whether this session was already told about an overlap on this file, delivered or still pending."""
+    async def already_told(self, team: str, session_id: str, kinds: list[str], topic: str) -> bool:
+        """Whether this session already got (or has pending) a message of these kinds on this topic."""
         async with self.pool.connection() as conn:
             cur = await conn.execute(
                 """
                 SELECT 1 FROM messages m
-                WHERE m.team = %s AND m.kind IN ('overlap', 'conflict') AND %s = ANY (m.topics)
+                WHERE m.team = %s AND m.kind = ANY (%s) AND %s = ANY (m.topics)
                   AND (m.to_session = %s
                        OR EXISTS (SELECT 1 FROM deliveries d WHERE d.message_id = m.id AND d.session_id = %s))
                 LIMIT 1
                 """,
-                (team, f"file:{file}", session_id, session_id),
+                (team, kinds, topic, session_id, session_id),
             )
             return await cur.fetchone() is not None
+
+    async def recent_host_users(self, team: str, host: str, session_id: str, minutes: int) -> list[dict]:
+        """Other sessions that called this host lately, most recent first."""
+        async with self.pool.connection() as conn:
+            cur = await conn.execute(
+                """
+                SELECT r.session_id, r.user_name, r.last_seen, s.intent
+                FROM session_resources r
+                JOIN sessions s ON s.team = r.team AND s.session_id = r.session_id
+                WHERE r.team = %s AND r.kind = 'host' AND r.value = %s AND r.session_id <> %s
+                  AND r.last_seen > now() - make_interval(mins => %s)
+                ORDER BY r.last_seen DESC
+                LIMIT 3
+                """,
+                (team, host, session_id, minutes),
+            )
+            return await cur.fetchall()
 
     async def session_intent(self, team: str, session_id: str) -> str | None:
         async with self.pool.connection() as conn:
