@@ -405,24 +405,46 @@ class Database:
             return await cur.fetchone()
 
     async def team_activity(self, team: str, repo: str, minutes: int) -> list[dict]:
-        """Live sessions in a repo with what they are doing and the files they edited lately."""
+        """Live sessions in a repo: what they are doing, files they edited and files they touched."""
         async with self.pool.connection() as conn:
             cur = await conn.execute(
                 """
                 SELECT s.session_id, s.user_name, s.intent, s.last_summary, s.last_event_at,
-                       COALESCE(array_agg(e.value ORDER BY e.last_seen DESC)
-                                FILTER (WHERE e.value IS NOT NULL), '{}') AS editing
+                       ARRAY(SELECT e.value FROM session_resources e
+                             WHERE e.team = s.team AND e.session_id = s.session_id AND e.kind = 'edit'
+                               AND e.last_seen > now() - make_interval(mins => %(minutes)s)
+                             ORDER BY e.last_seen DESC) AS editing,
+                       ARRAY(SELECT f.value FROM session_resources f
+                             WHERE f.team = s.team AND f.session_id = s.session_id AND f.kind = 'file'
+                               AND f.last_seen > now() - make_interval(mins => %(minutes)s)
+                             ORDER BY f.last_seen DESC LIMIT 40) AS touching
                 FROM sessions s
-                JOIN session_resources r ON r.team = s.team AND r.session_id = s.session_id
-                     AND r.kind = 'repo' AND r.value = %s
-                LEFT JOIN session_resources e ON e.team = s.team AND e.session_id = s.session_id
-                     AND e.kind = 'edit' AND e.last_seen > now() - make_interval(mins => %s)
-                WHERE s.team = %s AND s.ended_at IS NULL
-                  AND s.last_event_at > now() - make_interval(mins => %s)
-                GROUP BY s.session_id, s.user_name, s.intent, s.last_summary, s.last_event_at
+                WHERE s.team = %(team)s AND s.ended_at IS NULL
+                  AND s.last_event_at > now() - make_interval(mins => %(minutes)s)
+                  AND EXISTS (SELECT 1 FROM session_resources r
+                              WHERE r.team = s.team AND r.session_id = s.session_id
+                                AND r.kind = 'repo' AND r.value = %(repo)s)
                 ORDER BY s.last_event_at DESC
                 """,
-                (repo, minutes, team, minutes),
+                {"team": team, "repo": repo, "minutes": minutes},
+            )
+            return await cur.fetchall()
+
+    async def active_repos(self, team: str, minutes: int) -> list[dict]:
+        """Repos with live sessions lately, busiest first."""
+        async with self.pool.connection() as conn:
+            cur = await conn.execute(
+                """
+                SELECT r.value AS repo, count(DISTINCT r.session_id) AS sessions,
+                       max(r.last_seen) AS last_seen
+                FROM session_resources r
+                JOIN sessions s ON s.team = r.team AND s.session_id = r.session_id
+                WHERE r.team = %s AND r.kind = 'repo' AND s.ended_at IS NULL
+                  AND r.last_seen > now() - make_interval(mins => %s)
+                GROUP BY r.value
+                ORDER BY max(r.last_seen) DESC
+                """,
+                (team, minutes),
             )
             return await cur.fetchall()
 
