@@ -2,9 +2,10 @@
 
     python agent/claude-code/doctor.py        (python3 on macOS)
 
-It checks the key, the server, the hook settings, that accents survive the trip, the MCP server, the
-checkout (on main and up to date, so the hooks run the code that is deployed) and whether the server has
-seen your sessions lately. It sends nothing that creates a session or a message. Standard library only.
+It checks the key, the server, the hook settings, the team plugin, that accents survive the trip, the MCP
+server, the checkout (on main and up to date, so the hooks run the code that is deployed) and whether the
+server has seen your sessions lately. It sends nothing that creates a session or a message.
+Standard library only.
 """
 
 from __future__ import annotations
@@ -104,6 +105,36 @@ def check_hooks(report: Report) -> None:
                 report.bad("disableAllHooks is on in .claude/settings.local.json", "Remove it.")
         except ValueError:
             report.bad(".claude/settings.local.json is not valid JSON", "Fix or delete it.")
+
+
+def plugin_installed(plugins_dir: Path) -> bool:
+    """Whether Claude Code lists the team plugin (build101@build101) as installed."""
+    try:
+        data = json.loads((plugins_dir / "installed_plugins.json").read_text(encoding="utf-8"))
+    except (OSError, ValueError):
+        return False
+    plugins = data.get("plugins", data) if isinstance(data, dict) else {}
+    return any(str(name).startswith("build101@") for name in plugins)
+
+
+def check_plugin(report: Report, environ: dict, plugins_dir: Path | None = None) -> None:
+    """The plugin brings the same hooks and MCP to every other repo (plugin/README.md); it is optional."""
+    plugins_dir = plugins_dir or Path(os.path.expanduser("~/.claude/plugins"))
+    if not plugin_installed(plugins_dir):
+        report.warn(
+            "Team plugin not installed: build101 only runs inside this repo",
+            "To use it in every repo: /plugin marketplace add hackaton2026bnicks/hackatonbuild101, "
+            "then /plugin install build101@build101 (plugin/README.md).",
+        )
+        return
+    home = environ.get("BUILD101_HOME")
+    if not home or not Path(home).expanduser().is_dir():
+        report.bad(
+            "Team plugin installed but BUILD101_HOME is not set, so its hooks do nothing",
+            f"Point it at this clone: export BUILD101_HOME={ROOT.as_posix()} (setx on Windows) and restart.",
+        )
+    else:
+        report.ok("Team plugin installed and BUILD101_HOME points to a clone")
 
 
 def check_encoding(report: Report) -> None:
@@ -225,6 +256,7 @@ def main() -> int:
     check_python(report)
     user = check_server(report, environ)
     check_hooks(report)
+    check_plugin(report, environ)
     check_encoding(report)
     check_mcp(report, environ)
     check_checkout(report)
