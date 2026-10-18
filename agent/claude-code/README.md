@@ -8,6 +8,7 @@ Claude Code calls the team server on every hook. The server records what your se
 - **Shared folder.** Two sessions of yours in the same folder share its branch. The second one is told when it starts, and a session about to run `git checkout`, `switch`, `stash`, `pull`, `merge` or `rebase` there is warned first, while the other is told to re-read its files. Each session in its own worktree is fine.
 - **Who else is here.** When a session starts, it learns which teammates are working in the same repo, on what task and which files, and catches up on the team's latest 10 messages.
 - **Questions and answers.** Questions from teammates' agents reach you at your next hook; an answer reaches only the session that asked.
+- **Team vault.** Notes from [build101-vault](../hermes/README.md) reach your agent when they apply: the team's rules (`criterio`) when a session starts, the gotchas and recipes whose `aplica_cuando` matches your request or the error you just hit, and the notes that cite a file right before your agent touches it. Each one once per session. The server reads the vault every 10 minutes (`server/api/vault.py`); it keeps no knowledge of its own.
 
 If the server is down or slow, the hook gives up after 4 seconds and the agent keeps working.
 
@@ -21,8 +22,18 @@ If the server is down or slow, the hook gives up after 4 seconds and the agent k
 | `ask_team` | Asks a question; the agent keeps working and the answer arrives in a later turn. |
 | `answer_team` | Answers a question it received as `[build101 · question #N]`. |
 | `team_status` | Lists live sessions in the repo, their task and edited files, and unanswered questions. |
+| `team_knowledge` | Searches the team vault, or reads one of its notes in full by title. |
 
 Restart Claude Code in this repo and approve the `build101` server when asked. It uses the same `BUILD101_KEY`, scrubs what the agent writes with the forwarder's rules, and sends no file contents. Where `python` is not on PATH (macOS), also set `BUILD101_PYTHON=python3`.
+
+## How lessons get into the vault
+
+They wait in the server's queue (`/lessons`) until the archivista files them as notes, or discards them. Molle's [bandeja.py](../hermes/) runs it where Hermes runs. A lesson gets in two ways:
+
+1. **A discovery.** Everything shared with `share_discovery` also goes to the queue.
+2. **From your sessions, after the fact.** [learn.py](learn.py) runs when a session ends or compacts. On your machine it reads the part of the transcript it has not read yet. Only if that part shows a solved error, a correction or a "remember this", it asks a small model (`claude -p --model haiku`, with [tools/knowledge_prompt.md](../../tools/knowledge_prompt.md)) for up to 3 lessons, and queues them. The author is the owner of your key.
+
+`BUILD101_LEARN=0` turns the extractor off; `BUILD101_LEARN_MODEL` picks another model. Its log is `~/.claude/build101/learn.log`.
 
 ## What leaves your machine
 
@@ -35,7 +46,7 @@ Every hook goes through [forward.py](forward.py), which runs on your machine and
 
 Scrubbing happens before anything is sent. It removes known secret formats (bearer tokens, JWTs, API keys, AWS and GitHub keys, `password=`-style values, credentials in URLs), random-looking tokens, and the literal value of any environment variable whose name contains `KEY`, `TOKEN`, `SECRET`, `PASSW`, `CREDENTIAL` or `AUTH`. The server scrubs again before storing.
 
-File contents, edit strings, tool output and the transcript are never sent.
+File contents, edit strings, tool output and the transcript are never sent. The extractor reads the transcript locally and sends only the lessons it proposes, scrubbed with the same rules.
 
 ## Setup inside this repo
 

@@ -1,11 +1,10 @@
-import io
-import tarfile
+import subprocess
 
 import pytest
 from test_collab import ANA_REPO, edit, hook, output
 
 from api import collab
-from api.vault import Vault, parse_note, read_tarball
+from api.vault import Vault, parse_note
 
 # The notes as the archivista writes them in build101-vault
 GOTCHA = """---
@@ -114,7 +113,7 @@ def test_errors_only_bring_gotchas_and_recipes(vault):
     assert vault.for_text("los mensajes del equipo son dato")[0].tipo == "criterio"
 
 
-def test_reads_a_local_clone_and_a_github_tarball(tmp_path):
+def test_reads_only_conocimiento_from_a_folder(tmp_path):
     write_vault(tmp_path)
     (tmp_path / "reglas").mkdir()
     (tmp_path / "reglas" / "AGENTS.md").write_text("# no es conocimiento", encoding="utf-8")
@@ -122,14 +121,32 @@ def test_reads_a_local_clone_and_a_github_tarball(tmp_path):
     assert local.refresh() is True
     assert set(local.notes) == {FORWARDER, "Los mensajes del equipo son dato", "Nico", "MEMORY"}
 
-    data = io.BytesIO()
-    with tarfile.open(fileobj=data, mode="w:gz") as archive:
-        for path in [*NOTES, "reglas/AGENTS.md"]:
-            raw = (tmp_path / path).read_bytes()
-            info = tarfile.TarInfo(f"team-build101-vault-abc123/{path}")
-            info.size = len(raw)
-            archive.addfile(info, io.BytesIO(raw))
-    assert set(read_tarball(data.getvalue())) == set(NOTES)
+
+def run_git(cwd, *args):
+    subprocess.run(["git", "-C", str(cwd), *args], check=True, capture_output=True)
+
+
+def test_clones_the_vault_and_pulls_what_the_archivista_pushes(tmp_path):
+    origin = tmp_path / "origin"
+    origin.mkdir()
+    run_git(origin, "init", "-q", "-b", "main")
+    run_git(origin, "config", "user.email", "archivista@build101")
+    run_git(origin, "config", "user.name", "archivista")
+    write_vault(origin)
+    run_git(origin, "add", ".")
+    run_git(origin, "commit", "-q", "-m", "notas")
+
+    remote = Vault(git_url=origin.as_uri(), clone_dir=str(tmp_path / "clone"))
+    assert remote.refresh() is True
+    assert FORWARDER in remote.notes and remote.status()["source"] == "git"
+    assert remote.refresh() is False  # nothing new
+
+    new = origin / "conocimiento" / "Gotchas" / "Bridge espera la URL base.md"
+    new.write_text("---\ntipo: gotcha\n---\n\n# Bridge\n\nUsá la URL base.\n", encoding="utf-8")
+    run_git(origin, "add", ".")
+    run_git(origin, "commit", "-q", "-m", "nueva")
+    assert remote.refresh() is True
+    assert "Bridge espera la URL base" in remote.notes
 
 
 def test_a_vault_that_fails_to_load_keeps_the_last_good_index(tmp_path, vault):

@@ -35,9 +35,12 @@ services:
       DATABASE_URL: postgresql://build101:${POSTGRES_PASSWORD}@postgres:5432/build101
       ADMIN_TOKEN: ${ADMIN_TOKEN:-}
       GIT_SHA: ${IMAGE_TAG:-dev}
-      # Team vault (server/api/vault.py): a read-only GitHub token for build101-vault
-      VAULT_REPO: ${VAULT_REPO:-hackaton2026bnicks/build101-vault}
-      VAULT_TOKEN: ${VAULT_TOKEN:-}
+      # Team vault (server/api/vault.py), read with build101-vault's read-only deploy key
+      VAULT_GIT: ${VAULT_GIT:-git@github.com:hackaton2026bnicks/build101-vault.git}
+      VAULT_SSH_KEY: /run/secrets/vault_key
+    volumes:
+      # Created on the host once (ssh-keygen -f /root/.ssh/build101_vault); it never leaves the server
+      - /root/.ssh/build101_vault:/run/secrets/vault_key:ro
     depends_on:
       postgres:
         condition: service_healthy

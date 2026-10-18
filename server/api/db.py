@@ -11,6 +11,10 @@ from api.models import Event
 
 SCHEMA = (Path(__file__).parent / "schema.sql").read_text()
 
+# Spanish names, the ones agent/hermes/bandeja.py reads
+LESSON_COLUMNS = """id, author AS autor, session_id, repo, texto, titulo, tipo, aplica_cuando, archivos,
+                    skill, fuente, status, nota, motivo, done_by, created_at, done_at"""
+
 SESSION_UPSERT = """
 INSERT INTO sessions (team, session_id, user_name, agent, parent_session_id, started_at,
                       last_event_at, last_event_type, last_summary, intent, ended_at, event_count)
@@ -416,6 +420,48 @@ class Database:
                 """,
                 (team, session_id, user, note, hook, outcome),
             )
+
+    async def create_lesson(self, team: str, author: str, lesson: dict) -> dict:
+        async with self.pool.connection() as conn:
+            cur = await conn.execute(
+                f"""
+                INSERT INTO lessons (team, author, session_id, repo, texto, titulo, tipo, aplica_cuando,
+                                     archivos, skill, fuente)
+                VALUES (%(team)s, %(author)s, %(session_id)s, %(repo)s, %(texto)s, %(titulo)s, %(tipo)s,
+                        %(aplica_cuando)s, %(archivos)s, %(skill)s, %(fuente)s)
+                RETURNING {LESSON_COLUMNS}
+                """,
+                {"team": team, "author": author, **lesson},
+            )
+            return await cur.fetchone()
+
+    async def list_lessons(self, team: str, status: str | None, limit: int) -> list[dict]:
+        """Pending ones oldest first, so the archivista files them in order; the rest newest first."""
+        order = "id" if status == "pending" else "id DESC"
+        async with self.pool.connection() as conn:
+            cur = await conn.execute(
+                f"""
+                SELECT {LESSON_COLUMNS} FROM lessons
+                WHERE team = %s AND (%s::text IS NULL OR status = %s)
+                ORDER BY {order} LIMIT %s
+                """,
+                (team, status, status, limit),
+            )
+            return await cur.fetchall()
+
+    async def finish_lesson(
+        self, team: str, lesson_id: int, by: str, nota: str | None, motivo: str | None
+    ) -> dict | None:
+        async with self.pool.connection() as conn:
+            cur = await conn.execute(
+                f"""
+                UPDATE lessons SET status = %s, nota = %s, motivo = %s, done_by = %s, done_at = now()
+                WHERE team = %s AND id = %s
+                RETURNING {LESSON_COLUMNS}
+                """,
+                ("filed" if nota else "discarded", nota, motivo, by, team, lesson_id),
+            )
+            return await cur.fetchone()
 
     async def session_brief(self, team: str, session_id: str) -> dict:
         """What a subagent should know about its parent session."""

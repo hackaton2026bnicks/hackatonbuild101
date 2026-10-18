@@ -27,7 +27,6 @@ APP_HOST=$(param APP_HOST)
 POSTGRES_PASSWORD=$(param POSTGRES_PASSWORD)
 ADMIN_TOKEN=$(param ADMIN_TOKEN)
 ANTHROPIC_API_KEY=$(param ANTHROPIC_API_KEY)
-VAULT_TOKEN=$(param VAULT_TOKEN)
 EOF
 
 aws ecr get-login-password --region "$REGION" | docker login --username AWS --password-stdin "$REGISTRY"

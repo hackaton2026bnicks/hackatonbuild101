@@ -113,3 +113,29 @@ CREATE TABLE IF NOT EXISTS vault_deliveries (
     delivered_at  timestamptz NOT NULL DEFAULT now(),
     PRIMARY KEY (team, session_id, note)
 );
+
+-- Lessons waiting for the archivista (agent/hermes/bandeja.py), which runs where Hermes runs and files
+-- them in build101-vault. They come from learn.py when a session ends and from share_discovery.
+CREATE TABLE IF NOT EXISTS lessons (
+    id             bigserial PRIMARY KEY,
+    team           text NOT NULL,
+    author         text NOT NULL,
+    session_id     text,
+    repo           text,
+    texto          text NOT NULL,
+    titulo         text,
+    tipo           text,
+    aplica_cuando  text,
+    archivos       text[] NOT NULL DEFAULT '{}',
+    fuente         text NOT NULL,
+    status         text NOT NULL DEFAULT 'pending',   -- pending | filed | discarded
+    nota           text,
+    motivo         text,
+    done_by        text,
+    created_at     timestamptz NOT NULL DEFAULT now(),
+    done_at        timestamptz
+);
+
+ALTER TABLE lessons ADD COLUMN IF NOT EXISTS skill text;
+
+CREATE INDEX IF NOT EXISTS lessons_queue ON lessons (team, status, id);
