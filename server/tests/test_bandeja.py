@@ -45,6 +45,9 @@ def fake_hermes(vault, writes=True, returncode=0, stdout="listo"):
             return subprocess.run(args, **kwargs)
         prompts.append(args[-1])
         if writes:
+            component = vault / "conocimiento" / "Componentes" / "Servidor API.md"
+            component.parent.mkdir(exist_ok=True)
+            component.write_text("---\ntipo: componente\n---\n")
             note = vault / "conocimiento" / "Gotchas" / "Python 3.9 en el forwarder.md"
             note.parent.mkdir(exist_ok=True)
             note.write_text("---\ntipo: gotcha\n---\n")
@@ -108,6 +111,12 @@ def test_filed_lesson_is_pushed_and_marked_with_its_note(vault):
         text=True,
     ).stdout.strip()
     assert log == "nico|nico: El forwarder falla en Python 3.9"
+
+
+def test_accented_note_names_come_back_unescaped(vault):
+    note = vault / "conocimiento" / "Línea de base.md"
+    note.write_text("---\ntipo: criterio\n---\n", encoding="utf-8")
+    assert bandeja.changed_notes(vault) == ["conocimiento/Línea de base.md"]
 
 
 def test_lesson_the_archivist_drops_is_discarded_with_its_reason(vault):

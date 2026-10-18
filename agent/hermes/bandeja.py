@@ -112,16 +112,32 @@ def git(vault: Path, *args: str, run=subprocess.run) -> subprocess.CompletedProc
     return run(["git", "-C", str(vault), *args], capture_output=True, text=True)
 
 
+def note_type(path: Path) -> str:
+    try:
+        head = path.read_text(encoding="utf-8")[:500]
+    except OSError:
+        return ""
+    for line in head.splitlines()[1:]:
+        if line.startswith("tipo:"):
+            return line[5:].strip()
+        if line.strip() == "---":
+            break
+    return ""
+
+
 def changed_notes(vault: Path, run=subprocess.run) -> list[str]:
-    """Notas tocadas en conocimiento/, las nuevas primero. MEMORY.md y las personas no son la nota."""
-    out = git(vault, "status", "--porcelain", "--untracked-files=all", "--", "conocimiento", run=run).stdout
-    new, touched = [], []
-    for line in out.splitlines():
-        status, path = line[:2], line[3:].strip().strip('"')
+    """Notas tocadas en conocimiento/: las nuevas primero, y los componentes al final, porque el
+    archivista suele crear el del componente al enlazar la nota. MEMORY.md y las personas no son la nota."""
+    # -z: sin comillas ni escapes octales en los nombres con acentos o espacios
+    out = git(vault, "status", "--porcelain", "-z", "--untracked-files=all", "--", "conocimiento", run=run)
+    ranked = []
+    for entry in out.stdout.split("\0"):
+        status, path = entry[:2], entry[3:]
         if not path.endswith(".md") or path.endswith("MEMORY.md") or "/Equipo/" in path:
             continue
-        (new if "?" in status or "A" in status else touched).append(path)
-    return new + touched
+        is_new = "?" in status or "A" in status
+        ranked.append((not is_new, note_type(vault / path) == "componente", path))
+    return [path for *_, path in sorted(ranked)]
 
 
 def file_one(lesson: dict, vault: Path, run=subprocess.run) -> dict | None:

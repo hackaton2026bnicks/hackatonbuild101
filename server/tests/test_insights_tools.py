@@ -85,3 +85,31 @@ def test_dry_run_sends_nothing(tmp_path, capsys, monkeypatch):
     path.write_text(json.dumps(RESULTADO), encoding="utf-8")
     assert to_vault.main(["--resultado", str(path), "--dry-run"]) == 0
     assert len(json.loads(capsys.readouterr().out)) == 3
+
+
+digest = load("session_digest")
+
+
+def test_rerun_with_skip_numbers_batches_after_the_existing_cards(tmp_path, monkeypatch):
+    def fact(session_id):
+        return {
+            "session_id": session_id,
+            "start": "2026-10-18T10:00:00",
+            "prompts": ["hola"],
+            "human_prompts": 1,
+            "tool_calls": 0,
+        }
+
+    (tmp_path / "cards_0.jsonl").write_text(json.dumps({"session_id": "vieja"}) + "\n", encoding="utf-8")
+    (tmp_path / "batch_0.jsonl").write_text("ya clasificado\n", encoding="utf-8")
+    facts = tmp_path / "facts.jsonl"
+    facts.write_text("\n".join(json.dumps(fact(s)) for s in ("vieja", "nueva")) + "\n", encoding="utf-8")
+    monkeypatch.setattr(digest, "digest", lambda r: {"session_id": r["session_id"]})
+    monkeypatch.setattr(
+        sys,
+        "argv",
+        ["x", "--facts", str(facts), "--out-dir", str(tmp_path), "--skip", str(tmp_path / "cards_*.jsonl")],
+    )
+    digest.main()
+    assert sorted(p.name for p in tmp_path.glob("batch_*.jsonl")) == ["batch_1.jsonl"]
+    assert json.loads((tmp_path / "batch_1.jsonl").read_text())["session_id"] == "nueva"

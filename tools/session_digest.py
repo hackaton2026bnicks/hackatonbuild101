@@ -68,6 +68,13 @@ def digest(r: dict) -> dict:
     }
 
 
+def first_index(out: str) -> int:
+    """Lotes nuevos numerados después de las fichas que ya hay: batch_N se clasifica en cards_N,
+    y al volver a correr con --skip un batch_0 nuevo pisaría el cards_0 de la corrida anterior."""
+    taken = [int(m[1]) for name in os.listdir(out) if (m := re.fullmatch(r"cards_(\d+)\.jsonl", name))]
+    return max(taken) + 1 if taken else 0
+
+
 def main():
     ap = argparse.ArgumentParser()
     ap.add_argument(
@@ -95,9 +102,13 @@ def main():
 
     out = local_path(a.out_dir)
     os.makedirs(out, exist_ok=True)
-    n = 0
+    # Los lotes de una corrida anterior ya tienen su ficha: si quedan, se volverían a clasificar
+    for name in os.listdir(out):
+        if re.fullmatch(r"batch_\d+\.jsonl", name):
+            os.remove(os.path.join(out, name))
+    start, n = first_index(out), 0
     for i in range(0, len(rows), a.size):
-        path = os.path.join(out, f"batch_{i // a.size}.jsonl")
+        path = os.path.join(out, f"batch_{start + i // a.size}.jsonl")
         with open(path, "w", encoding="utf-8") as fh:
             for r in rows[i : i + a.size]:
                 fh.write(json.dumps(digest(r), ensure_ascii=False) + "\n")
