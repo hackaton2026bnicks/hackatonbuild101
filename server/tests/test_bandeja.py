@@ -153,3 +153,15 @@ def test_lesson_that_only_touches_the_log_is_discarded(vault):
     api = FakeApi([LESSON])
     bandeja.round_once(api, vault, run=run, log=lambda _: None)
     assert api.closed == [(7, {"descartada": "Es un aviso de estado, no guardé nada."})]
+
+
+def test_claude_archivist_gets_the_soul_on_stdin_inside_the_vault(vault):
+    command, options = bandeja.archivist_call("Autor: nico\n\nhola", vault, {"BANDEJA_ARCHIVISTA": "claude"})
+    assert "-p" in command and "hermes" not in command[0]
+    assert options["cwd"] == str(vault)
+    assert options["input"].startswith("# Archivista") and options["input"].endswith("Autor: nico\n\nhola")
+
+
+def test_hermes_stays_the_default_archivist(vault):
+    command, _ = bandeja.archivist_call("Autor: nico", vault, {})
+    assert command[:3] == ["hermes", "-p", "archivista"]
