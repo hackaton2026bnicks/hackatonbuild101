@@ -1,11 +1,14 @@
 {
   "name": "build101",
-  "owner": { "name": "build101" },
+  "owner": {
+    "name": "build101"
+  },
+  "description": "Lo que el equipo de build101 comparte: hooks, MCP y skills.",
   "plugins": [
     {
       "name": "build101",
       "source": "./plugin",
-      "description": "Skills del equipo de build101: /insights para analizar tus sesiones de Claude y sumarlas al equipo, y /puente para escuchar al equipo desde una sesión aparte."
+      "description": "build101 en cualquier repo: hooks y MCP que conectan cada sesión con el equipo y su bóveda, /insights y /puente."
     }
   ]
 }

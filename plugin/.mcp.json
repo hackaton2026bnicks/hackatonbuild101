@@ -1,0 +1,12 @@
+{
+  "mcpServers": {
+    "build101": {
+      "type": "stdio",
+      "command": "sh",
+      "args": [
+        "${CLAUDE_PLUGIN_ROOT}/scripts/run.sh",
+        "mcp_server.py"
+      ]
+    }
+  }
+}

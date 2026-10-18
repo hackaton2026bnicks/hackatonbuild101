@@ -58,9 +58,12 @@ en la cola del server (`POST /api/lessons`). Hermes no corre en todas las máqui
 que alguien con Hermes y la bóveda deja corriendo la bandeja:
 
 ```sh
-python3 agent/hermes/bandeja.py          # una vuelta cada 2 minutos (BANDEJA_INTERVAL)
-python3 agent/hermes/bandeja.py --once   # una vuelta y sale
+agent/hermes/bandeja-servicio.sh         # la deja corriendo sola en esta Mac (launchd), con log en ~/.claude/build101/bandeja.log
+agent/hermes/bandeja-servicio.sh --quitar
+python3 agent/hermes/bandeja.py --once   # una vuelta a mano y sale
 ```
+
+Alcanza con una máquina del equipo. Si está apagada, las lecciones esperan en la cola y nada se pierde.
 
 Por cada lección pendiente le pasa al archivista el texto con su autor, sube lo que
 escribió (como `guardar`) y la marca en el server con la nota que quedó, o como
