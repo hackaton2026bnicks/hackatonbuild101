@@ -110,7 +110,7 @@ def prompt_for(lesson: dict) -> str:
 
 
 def git(vault: Path, *args: str, run=subprocess.run) -> subprocess.CompletedProcess:
-    return run(["git", "-C", str(vault), *args], capture_output=True, text=True)
+    return run(["git", "-C", str(vault), *args], capture_output=True, text=True, encoding="utf-8")
 
 
 def note_type(path: Path) -> str:
