@@ -45,22 +45,33 @@ def parse_card(text: str) -> dict:
 def extract(session_id: str, args, system_prompt: str, workdir: str, env: dict) -> tuple[str, str]:
     condensed = open(os.path.join(args.out, "condensed", f"{session_id}.txt")).read()
     cmd = [
-        "claude", "-p",
-        "--model", args.model,
-        "--output-format", "json",
+        "claude",
+        "-p",
+        "--model",
+        args.model,
+        "--output-format",
+        "json",
         "--no-session-persistence",
-        "--setting-sources", "project",  # no user hooks: these runs must not be captured or evaluated
+        "--setting-sources",
+        "project",  # no user hooks: these runs must not be captured or evaluated
         "--strict-mcp-config",
-        "--tools", "",
-        "--system-prompt", system_prompt,
+        "--tools",
+        "",
+        "--system-prompt",
+        system_prompt,
     ]
     last_error = ""
     for attempt in range(2):
         started = time.time()
         try:
             out = subprocess.run(
-                cmd, input=f"<session>\n{condensed}\n</session>", capture_output=True, text=True,
-                cwd=workdir, env=env, timeout=TIMEOUT,
+                cmd,
+                input=f"<session>\n{condensed}\n</session>",
+                capture_output=True,
+                text=True,
+                cwd=workdir,
+                env=env,
+                timeout=TIMEOUT,
             )
         except subprocess.TimeoutExpired:
             last_error = "timeout"

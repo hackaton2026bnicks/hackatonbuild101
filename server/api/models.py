@@ -142,3 +142,35 @@ class MessageCreate(BaseModel):
         if (self.kind == "answer") != (self.reply_to is not None):
             raise ValueError("reply_to is required for answers and only allowed on them")
         return self
+
+
+LessonType = Literal["gotcha", "receta", "decision", "criterio", "recurso"]
+
+
+class LessonCreate(BaseModel):
+    """A lesson for the team vault. It waits in the server until the archivista (agent/hermes/bandeja.py)
+    files it as a note or discards it; tipo, titulo and aplica_cuando are only suggestions to it."""
+
+    texto: str = Field(min_length=1, max_length=4000)
+    titulo: str | None = Field(default=None, max_length=200)
+    tipo: LessonType | None = None
+    aplica_cuando: str | None = Field(default=None, max_length=300)
+    archivos: list[Annotated[str, Field(max_length=300)]] = Field(default_factory=list, max_length=10)
+    # The skill that already does this, when there is one (docs/PLAN-EQUIPO.md, objective 5)
+    skill: str | None = Field(default=None, max_length=128)
+    fuente: str = Field(default="sesión de Claude Code", max_length=200)
+    repo: str | None = Field(default=None, max_length=200)
+    session_id: str | None = Field(default=None, max_length=128)
+
+
+class LessonDone(BaseModel):
+    """The archivista's verdict: the note it wrote or updated, or why it did not keep the lesson."""
+
+    nota: str | None = Field(default=None, max_length=300)
+    descartada: str | None = Field(default=None, max_length=300)
+
+    @model_validator(mode="after")
+    def one_outcome(self) -> "LessonDone":
+        if bool(self.nota) == bool(self.descartada):
+            raise ValueError("send either nota or descartada")
+        return self

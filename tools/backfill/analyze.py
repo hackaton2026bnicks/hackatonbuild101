@@ -29,7 +29,9 @@ FEATURES = {
     "otra sesión": ("mcp__ccd_session__start_session", "SendMessage", "mcp__ccd_session_mgmt__send_message"),
     "artifacts": ("Artifact",),
     "navegador": (
-        "mcp__Claude_Browser__navigate", "mcp__Claude_Browser__computer", "mcp__claude-in-chrome__navigate",
+        "mcp__Claude_Browser__navigate",
+        "mcp__Claude_Browser__computer",
+        "mcp__claude-in-chrome__navigate",
     ),
     "worktree": ("EnterWorktree",),
     "tareas programadas": ("mcp__scheduled-tasks__create_scheduled_task",),
@@ -57,8 +59,22 @@ def coarse(token: str) -> str | None:
     if token.startswith("ssh:"):
         # Addresses stay out of the tables: an IP becomes ip-*.<last octet>
         return re.sub(r"\d+\.\d+\.\d+\.(\d+)", r"ip-*.\1", token.split(">")[0])
-    if token.startswith(("docker", "curl:", "script:", "skill:", "agent:", "npm:run", "npx", "psql",
-                         "kubectl", "systemctl", "vercel", "supabase")):
+    if token.startswith(
+        (
+            "docker",
+            "curl:",
+            "script:",
+            "skill:",
+            "agent:",
+            "npm:run",
+            "npx",
+            "psql",
+            "kubectl",
+            "systemctl",
+            "vercel",
+            "supabase",
+        )
+    ):
         return token
     if token.startswith("python:") and token.endswith(".py"):
         return token
@@ -98,35 +114,56 @@ def main():
     md = ["# E0: tablas agregadas", ""]
 
     md += ["## Totales", ""]
-    md.append(table(["Medida", "Valor"], [
-        ["Sesiones (transcripts)", len(facts)],
-        ["Con prompts humanos", len(human)],
-        ["Con ficha del extractor", len(cards)],
-        ["Automatizadas (según ficha)", len(automated)],
-        ["Rango", f"{min(f['started_at'] for f in facts.values())[:10]} a "
-                  f"{max(f['ended_at'] for f in facts.values())[:10]}"],
-        ["Horas activas", round(sum(f["active_minutes"] for f in facts.values()) / 60, 1)],
-        ["Prompts", sum(f["prompts"] for f in facts.values())],
-        ["Llamadas a herramientas", sum(f["tool_calls"] for f in facts.values())],
-        ["Errores de herramientas", sum(f["tool_errors"] for f in facts.values())],
-        ["Compactaciones", sum(f["compactions"] for f in facts.values())],
-        ["Sesiones con compactación", sum(1 for f in facts.values() if f["compactions"])],
-        ["Interrupciones", sum(f["interrupts"] for f in facts.values())],
-        ["Correcciones (regex)", sum(f["corrections"] for f in facts.values())],
-        ["Permisos denegados", sum(f["denials"] for f in facts.values())],
-        ["Tokens de salida (millones)", round(sum(f["output_tokens"] for f in facts.values()) / 1e6, 1)],
-        ["Costo del extractor (USD)", round(cost, 2)],
-    ]))
+    md.append(
+        table(
+            ["Medida", "Valor"],
+            [
+                ["Sesiones (transcripts)", len(facts)],
+                ["Con prompts humanos", len(human)],
+                ["Con ficha del extractor", len(cards)],
+                ["Automatizadas (según ficha)", len(automated)],
+                [
+                    "Rango",
+                    f"{min(f['started_at'] for f in facts.values())[:10]} a "
+                    f"{max(f['ended_at'] for f in facts.values())[:10]}",
+                ],
+                ["Horas activas", round(sum(f["active_minutes"] for f in facts.values()) / 60, 1)],
+                ["Prompts", sum(f["prompts"] for f in facts.values())],
+                ["Llamadas a herramientas", sum(f["tool_calls"] for f in facts.values())],
+                ["Errores de herramientas", sum(f["tool_errors"] for f in facts.values())],
+                ["Compactaciones", sum(f["compactions"] for f in facts.values())],
+                ["Sesiones con compactación", sum(1 for f in facts.values() if f["compactions"])],
+                ["Interrupciones", sum(f["interrupts"] for f in facts.values())],
+                ["Correcciones (regex)", sum(f["corrections"] for f in facts.values())],
+                ["Permisos denegados", sum(f["denials"] for f in facts.values())],
+                [
+                    "Tokens de salida (millones)",
+                    round(sum(f["output_tokens"] for f in facts.values()) / 1e6, 1),
+                ],
+                ["Costo del extractor (USD)", round(cost, 2)],
+            ],
+        )
+    )
 
     md += ["", "## Por repo", ""]
     by_repo = defaultdict(list)
     for f in facts.values():
         by_repo[f["repo"]].append(f)
-    md.append(table(["Repo", "Sesiones", "Horas", "Compactaciones", "Errores"], [
-        [repo, len(rows), round(sum(r["active_minutes"] for r in rows) / 60, 1),
-         sum(r["compactions"] for r in rows), sum(r["tool_errors"] for r in rows)]
-        for repo, rows in sorted(by_repo.items(), key=lambda kv: -len(kv[1]))
-    ]))
+    md.append(
+        table(
+            ["Repo", "Sesiones", "Horas", "Compactaciones", "Errores"],
+            [
+                [
+                    repo,
+                    len(rows),
+                    round(sum(r["active_minutes"] for r in rows) / 60, 1),
+                    sum(r["compactions"] for r in rows),
+                    sum(r["tool_errors"] for r in rows),
+                ]
+                for repo, rows in sorted(by_repo.items(), key=lambda kv: -len(kv[1]))
+            ],
+        )
+    )
 
     md += ["", "## Por tipo de trabajo (sesiones humanas con ficha)", ""]
     by_work = defaultdict(list)
@@ -138,12 +175,17 @@ def main():
         minutes = [f["active_minutes"] for f, _ in items]
         results = Counter(c.get("resultado") for _, c in items)
         repos = Counter(f["repo"] for f, _ in items)
-        rows.append([
-            work, len(items), round(sum(minutes) / 60, 1), round(statistics.median(minutes)),
-            sum(f["compactions"] for f, _ in items),
-            f"{results.get('resuelto', 0)}/{results.get('parcial', 0)}/{results.get('abandonado', 0)}",
-            ", ".join(f"{r} {n}" for r, n in repos.most_common(3)),
-        ])
+        rows.append(
+            [
+                work,
+                len(items),
+                round(sum(minutes) / 60, 1),
+                round(statistics.median(minutes)),
+                sum(f["compactions"] for f, _ in items),
+                f"{results.get('resuelto', 0)}/{results.get('parcial', 0)}/{results.get('abandonado', 0)}",
+                ", ".join(f"{r} {n}" for r, n in repos.most_common(3)),
+            ]
+        )
     headers = ["Trabajo", "Sesiones", "Horas", "Min. mediana", "Compact.", "Res/Parc/Aband", "Repos"]
     md.append(table(headers, rows))
 
@@ -155,10 +197,15 @@ def main():
             if fr != "ninguna":
                 friction[fr] += 1
                 friction_work[fr][c.get("trabajo")] += 1
-    md.append(table(["Fricción", "Sesiones", "Trabajos donde más aparece"], [
-        [fr, n, ", ".join(f"{w} {k}" for w, k in friction_work[fr].most_common(3))]
-        for fr, n in friction.most_common()
-    ]))
+    md.append(
+        table(
+            ["Fricción", "Sesiones", "Trabajos donde más aparece"],
+            [
+                [fr, n, ", ".join(f"{w} {k}" for w, k in friction_work[fr].most_common(3))]
+                for fr, n in friction.most_common()
+            ],
+        )
+    )
 
     md += ["", "## Qué podría ayudar, por tipo", ""]
     helps = Counter()
@@ -174,11 +221,17 @@ def main():
     def sessions_with(pred) -> int:
         return sum(1 for f in human if pred(f))
 
-    rows = [[name, sessions_with(lambda f, t=tools: any(f["tools"].get(x) for x in t))]
-            for name, tools in FEATURES.items()]
+    rows = [
+        [name, sessions_with(lambda f, t=tools: any(f["tools"].get(x) for x in t))]
+        for name, tools in FEATURES.items()
+    ]
     md.append(table(["Función", f"Sesiones (de {n_human})"], rows))
-    for key, title in (("skills", "Skills"), ("subagents", "Subagentes"), ("mcp_servers", "Servidores MCP"),
-                       ("slash_commands", "Slash commands")):
+    for key, title in (
+        ("skills", "Skills"),
+        ("subagents", "Subagentes"),
+        ("mcp_servers", "Servidores MCP"),
+        ("slash_commands", "Slash commands"),
+    ):
         usage = Counter()
         reach = Counter()
         for f in human:
@@ -206,24 +259,34 @@ def main():
         if not any(len(o) > len(gram) and so == s and joined in " → ".join(o) for o, so in frequent):
             kept.append((gram, s))
     kept.sort(key=lambda gs: (-gs[1], -len(gs[0])))
-    md.append(table(["Secuencia", "Sesiones", "Repos"], [
-        [" → ".join(g), s, ", ".join(sorted(sessions_of[g]))] for g, s in kept[:40]
-    ]))
+    md.append(
+        table(
+            ["Secuencia", "Sesiones", "Repos"],
+            [[" → ".join(g), s, ", ".join(sorted(sessions_of[g]))] for g, s in kept[:40]],
+        )
+    )
 
     md += ["", "## Unidades candidatas", ""]
     units = []
     for f, c in carded:
         for u in c.get("unidades") or []:
             title = u.get("title", "")
-            units.append({
-                "id": "ku_" + hashlib.sha1(f"{f['session_id']}{title}".encode()).hexdigest()[:10],
-                "session_id": f["session_id"], "date": (f["started_at"] or "")[:10], "repo": f["repo"],
-                "trabajo": c.get("trabajo"), **u,
-            })
+            units.append(
+                {
+                    "id": "ku_" + hashlib.sha1(f"{f['session_id']}{title}".encode()).hexdigest()[:10],
+                    "session_id": f["session_id"],
+                    "date": (f["started_at"] or "")[:10],
+                    "repo": f["repo"],
+                    "trabajo": c.get("trabajo"),
+                    **u,
+                }
+            )
     # Near-duplicate groups by title and keyword overlap, to merge during review
     group = list(range(len(units)))
-    signature = [words(u.get("title", "") + " " + " ".join((u.get("triggers") or {}).get("keywords", [])))
-                 for u in units]
+    signature = [
+        words(u.get("title", "") + " " + " ".join((u.get("triggers") or {}).get("keywords", [])))
+        for u in units
+    ]
     for i in range(len(units)):
         for j in range(i):
             a, b = signature[i], signature[j]
@@ -240,8 +303,10 @@ def main():
     md.append(table(["Destino", "Unidades"], Counter(u.get("destino") for u in units).most_common()))
     md += [""]
     md.append(table(["Confianza", "Unidades"], Counter(u.get("confidence") for u in units).most_common()))
-    md += ["", f"Grupos de casi duplicados con 2+ unidades: "
-               f"{sum(1 for n in Counter(group).values() if n > 1)}"]
+    md += [
+        "",
+        f"Grupos de casi duplicados con 2+ unidades: " f"{sum(1 for n in Counter(group).values() if n > 1)}",
+    ]
 
     with open(os.path.join(args.out, "summary.md"), "w") as out:
         out.write("\n".join(md) + "\n")
@@ -251,8 +316,11 @@ def main():
         ideas += [f"## {work} ({len(items)})", ""]
         for f, c in items:
             label = f"{f['started_at'][:10]} {f['repo']} · {f['title'] or c.get('objetivo', '')}"[:120]
-            helps = "; ".join(f"{h.get('tipo')}: {h.get('que')}" for h in c.get("podria_ayudar") or []
-                              if h.get("tipo") != "nada")
+            helps = "; ".join(
+                f"{h.get('tipo')}: {h.get('que')}"
+                for h in c.get("podria_ayudar") or []
+                if h.get("tipo") != "nada"
+            )
             steps = "; ".join(c.get("pasos_repetidos") or [])
             corrections = "; ".join(c.get("correcciones") or [])
             ideas.append(f"- **{label}** ({round(f['active_minutes'])} min)")

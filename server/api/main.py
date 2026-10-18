@@ -5,7 +5,7 @@ import json
 import logging
 import os
 from contextlib import asynccontextmanager
-from typing import Annotated
+from typing import Annotated, Literal
 
 from fastapi import Depends, FastAPI, Header, HTTPException, Query, Request
 from fastapi.responses import StreamingResponse
@@ -22,6 +22,8 @@ from api.models import (
     ConversationCreate,
     EventBatch,
     KeyRequest,
+    LessonCreate,
+    LessonDone,
     MessageCreate,
 )
 from api.ratelimit import RateLimiter, rate_limit_middleware
@@ -185,7 +187,54 @@ async def publish_message(body: MessageCreate, caller: Caller, request: Request)
         to_session=to_session,
     )
     request.app.state.broker.publish(caller.team, collab.feed_item(message, caller.user))
+    if body.kind == "discovery":
+        # Hot for whoever is working now; the archivista keeps it in the vault for whoever comes later
+        files = [topic[5:] for topic in topics if topic.startswith("file:")]
+        lesson = {"texto": message["body"], "archivos": files, "fuente": "share_discovery", "repo": body.repo}
+        await db.create_lesson(caller.team, caller.user, lesson_row(lesson, session_id))
     return message
+
+
+def lesson_row(fields: dict, session_id: str | None) -> dict:
+    row = {"titulo": None, "tipo": None, "aplica_cuando": None, "archivos": [], "skill": None, "repo": None}
+    row.update(fields)
+    for name in ("texto", "titulo", "aplica_cuando"):
+        if row[name]:
+            row[name] = scrub(row[name])
+    row["session_id"] = session_id
+    return row
+
+
+@app.post("/lessons", status_code=201)
+async def create_lesson(body: LessonCreate, caller: Caller, request: Request) -> dict:
+    """Queue a lesson for the archivista. The author is the key's owner, never what the client says."""
+    db: Database = request.app.state.db
+    session_id = body.session_id
+    if not session_id and body.repo:
+        session_id = await db.live_session(caller.team, caller.user, body.repo)
+    fields = body.model_dump(exclude={"session_id"})
+    return await db.create_lesson(caller.team, caller.user, lesson_row(fields, session_id))
+
+
+@app.get("/lessons")
+async def lessons(
+    caller: Caller,
+    request: Request,
+    status: Annotated[Literal["pending", "filed", "discarded", "all"], Query()] = "pending",
+    limit: Annotated[int, Query(ge=1, le=200)] = 20,
+) -> dict:
+    rows = await request.app.state.db.list_lessons(caller.team, None if status == "all" else status, limit)
+    return {"lessons": rows}
+
+
+@app.post("/lessons/{lesson_id}/done")
+async def lesson_done(lesson_id: int, body: LessonDone, caller: Caller, request: Request) -> dict:
+    lesson = await request.app.state.db.finish_lesson(
+        caller.team, lesson_id, caller.user, body.nota, body.descartada
+    )
+    if not lesson:
+        raise HTTPException(404, "No lesson with that id.")
+    return lesson
 
 
 @app.get("/repos")

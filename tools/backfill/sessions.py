@@ -45,8 +45,31 @@ URL_HOST = re.compile(r"https?://[^\s'\"<>]+")
 EDIT_TOOLS = {"Edit", "Write", "MultiEdit", "NotebookEdit"}
 # Read-only shell noise: kept in counts, left out of action sequences
 QUIET = {
-    "read", "grep", "glob", "ls", "cat", "head", "tail", "sed", "wc", "echo", "find", "cd", "awk", "sort",
-    "toolsearch", "todowrite", "mkdir", "pwd", "for", "true", "sleep", "jq", "diff", "test", "which",
+    "read",
+    "grep",
+    "glob",
+    "ls",
+    "cat",
+    "head",
+    "tail",
+    "sed",
+    "wc",
+    "echo",
+    "find",
+    "cd",
+    "awk",
+    "sort",
+    "toolsearch",
+    "todowrite",
+    "mkdir",
+    "pwd",
+    "for",
+    "true",
+    "sleep",
+    "jq",
+    "diff",
+    "test",
+    "which",
 }
 
 
