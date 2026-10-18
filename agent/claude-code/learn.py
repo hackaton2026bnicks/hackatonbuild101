@@ -30,7 +30,7 @@ from pathlib import Path
 HERE = Path(__file__).resolve().parent
 TOOLS = HERE.parents[1] / "tools"
 sys.path.insert(0, str(HERE))
-from forward import clean, env_secrets  # noqa: E402
+from forward import clean, env_secrets, read_stdin_json  # noqa: E402
 
 PROMPT = TOOLS / "knowledge_prompt.md"
 STATE_DIR = Path(os.path.expanduser("~/.claude/build101"))
@@ -316,7 +316,7 @@ def main() -> None:
             log(session_id, f"failed: {error!r}")
         return
     try:
-        raw = json.load(sys.stdin)
+        raw = read_stdin_json()
         if isinstance(raw, dict):
             start_worker(raw, os.environ)
     except Exception:
