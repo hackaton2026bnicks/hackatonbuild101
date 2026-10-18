@@ -146,6 +146,14 @@ async def publish_message(body: MessageCreate, caller: Caller, request: Request)
     return message
 
 
+@app.get("/repos")
+async def repos(
+    caller: Caller, request: Request, active_minutes: Annotated[int, Query(ge=1, le=7 * 24 * 60)] = 24 * 60
+) -> dict:
+    """Repos your team has live sessions in, so a dashboard can pick one."""
+    return {"repos": await request.app.state.db.active_repos(caller.team, active_minutes)}
+
+
 @app.get("/team")
 async def team(
     caller: Caller,

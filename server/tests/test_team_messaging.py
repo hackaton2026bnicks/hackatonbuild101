@@ -75,6 +75,10 @@ def test_team_shows_who_works_where_and_open_questions(client, make_key):
     by_user = {row["user_name"]: row for row in team["sessions"]}
     assert by_user["ana"]["you"] and not by_user["bob"]["you"]
     assert by_user["ana"]["editing"] == ["api/refunds.py"]
+    assert by_user["ana"]["touching"] == ["api/refunds.py"]
+
+    repos = client.get("/repos", headers=ana).json()["repos"]
+    assert [(r["repo"], r["sessions"]) for r in repos] == [("payments", 2)]
     assert [q["id"] for q in team["open_questions"]] == [question["id"]]
 
     publish(client, ana, kind="answer", reply_to=question["id"], body="No, it rate limits.", repo="payments")
