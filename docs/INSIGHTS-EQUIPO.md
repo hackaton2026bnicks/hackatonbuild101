@@ -6,22 +6,29 @@ Está escrita para que la siga Claude: la persona pide una sola cosa y revisa el
 
 ## Lo rápido
 
-1. Pedile a Alberto acceso de **editor** al [Tablero de uso Claude](https://claude.ai/artifact/2FHwYrQBk5siTAAVQ6P9P1). Sin ese acceso podés verlo pero no cargar.
-2. Abrí Claude Code en la raíz de este repo (`git pull` antes).
-3. Pedile:
+1. Instalá el plugin del equipo ([plugin/README.md](../plugin/README.md)): trae la skill `/insights`.
+2. En Claude Code, pedí:
 
-   > Seguí docs/INSIGHTS-EQUIPO.md para analizar mis sesiones y subir mis resultados al tablero del equipo. Mi nombre corto es `<tu-nombre>`.
+   > /insights `<tu-nombre>`
 
-4. Claude te muestra lo que encontró. Sacá o corregí lo que no quieras compartir y dale el ok para subir.
+3. Claude te muestra lo que encontró. Sacá o corregí lo que no quieras compartir y dale el ok para subir. Los números
+   van al tablero de la app del equipo (`POST /api/insights`, sección "What to build once for everyone"), las
+   oportunidades, estrellas y lo compartible a la bóveda, y te queda un `resultado.md` para pasar.
 
 Tarda entre 15 y 30 minutos, casi todo en el paso de fichas. Gasta tokens de un modelo chico: unas 120.000 por cada lote de 45 sesiones.
+
+Claude Code borra los transcripts de más de 30 días (`cleanupPeriodDays` en `~/.claude/settings.json`). Si querés más
+historia para la próxima, subilo (por ejemplo a 365).
+
+El resto de esta guía es lo que la skill hace por dentro, por si hay que correrlo a mano o cambiarlo.
 
 ## Dónde queda cada cosa
 
 | Qué | Dónde | Quién lo ve |
 |---|---|---|
 | Tus transcripts, `facts.jsonl`, las fichas y `insights.json` | Tu máquina, en `~/.claude/session-insights/` | Solo vos. Nunca salen |
-| `resultado.json`: tus seis números, cómo se reparten por trabajo, y tus hallazgos revisados | El tablero, documento `resultados/<persona>--<fecha>` | El equipo con acceso al tablero |
+| `resultado.json`: tus seis números, cómo se reparten por trabajo, y tus hallazgos revisados | El tablero de la app (`POST /api/insights`), uno por persona y período | El equipo |
+| Oportunidades, estrellas y compartible | La bóveda (`build101-vault`), como notas del archivista | El equipo |
 | Las herramientas y esta guía | Este repo | Cualquiera: **el repo es público** |
 
 Reglas que no se negocian:
@@ -75,7 +82,7 @@ Leé `insights.json` y las fichas, en especial `podria_ayudar`, `estrella_por_qu
 
 - **Cada cifra sale de `insights.json`, de las fichas o de una cuenta que hiciste sobre `facts.jsonl`.** Nada estimado a ojo. Si un dato no se puede verificar, no va.
 - **Oportunidades:** agrupá las ideas de `podria_ayudar` por tema, no por ficha. Contá las sesiones y sumá sus horas activas. Calculá `O = sesiones × minutos activos medianos × (1 + fricción relativa) ÷ esfuerzo`, con esfuerzo regla o adoptar 1, hook, skill o subagente 2, tool 3, MCP 5 y app 8, y la fricción relativa como F mediana del tema ÷ F mediana general − 1 (piso 0). Solo temas con 3 sesiones o más. Hasta 10.
-- **Tema:** un slug corto. Antes de inventar uno, leé el tablero (`ArtifactData list` de `resultados`) y reusá los temas que ya cargó el equipo; así se cruzan. Los que hay hoy: `estado-repo`, `estilo-respuestas`, `esquema-datos`, `deploy-vps`, `entorno-local`, `rutina-programada`, `mcp-base`, `revisar-resultados`, `documento-cliente`, `qa-navegador`.
+- **Tema:** un slug corto. Antes de inventar uno, leé el tablero (`GET /api/insights`) y reusá los temas que ya cargó el equipo; así se cruzan. Los que hay hoy: `estado-repo`, `estilo-respuestas`, `esquema-datos`, `deploy-vps`, `entorno-local`, `rutina-programada`, `mcp-base`, `revisar-resultados`, `documento-cliente`, `qa-navegador`.
 - **Estrellas:** las sesiones con mejor puntaje S de `insights.json` o marcadas como estrella en la ficha. Describí el *cómo* para que otra persona lo copie. Hasta 5.
 - **Compartible:** capital tuyo (skill, MCP, script, forma de pedir) que le sirve a otra persona. Hasta 8.
 - **Riesgos:** escrituras a producción fuera de una herramienta, envíos sin confirmar, secretos en prompts, deploys sin pedido. Hasta 5. Si encontrás un secreto real, avisale a la persona para que lo rote y no lo copies a ningún lado.
@@ -98,15 +105,19 @@ python3 tools/insights_export.py --persona <persona> \
 
 Si la validación falla, corregí `hallazgos.json` y volvé a correrlo. El script dice cuántos datos sensibles reemplazó y el id del documento.
 
-### 8. Subir al tablero
+### 8. Subir al tablero y a la bóveda
 
-Con la herramienta `ArtifactData` (cargala con ToolSearch si hace falta):
+```bash
+curl -sf -X POST -H "Authorization: Bearer $BUILD101_KEY" -H "Content-Type: application/json" \
+  --data-binary @"$HOME/.claude/session-insights/resultado.json" https://54-89-124-87.sslip.io/api/insights
+python3 tools/insights_to_vault.py --resultado ~/.claude/session-insights/resultado.json --dry-run   # mostrale qué va
+python3 tools/insights_to_vault.py --resultado ~/.claude/session-insights/resultado.json
+```
 
-- `action: "set"`, `url: "https://claude.ai/artifact/2FHwYrQBk5siTAAVQ6P9P1"`, `collection: "resultados"`, `doc_id: "<persona>--<periodo.hasta>"`, `file_path: "~/.claude/session-insights/resultado.json"` (ruta absoluta).
-- Si el documento ya existe, primero leelo con `get` y pasá su `version` como `if_version`.
-- Si la herramienta no está o la escritura falla por permisos: pedile a la persona que abra el tablero, pegue el contenido de `resultado.json` en "Cargar resultados al tablero" y toque **Guardar**.
+El tablero guarda uno por persona y período: si subís el mismo período otra vez, lo reemplaza. A la bóveda van las
+oportunidades, estrellas y lo compartible, como lecciones que el archivista guarda y cruza con las del resto.
 
-Al final, pasale el link del tablero y resumí en 3 líneas qué subió y en qué temas coincide con el resto del equipo.
+Al final, pasale la ruta de `resultado.md` y resumí en 3 líneas qué subió y en qué temas coincide con el resto del equipo.
 
 ## Formato de hallazgos.json
 
@@ -145,4 +156,4 @@ Al final, pasale el link del tablero y resumí en 3 líneas qué subió y en qu�
 | `session_facts.py` da 0 sesiones | Revisá que existan archivos en `~/.claude/projects/`. Las sesiones de la app web no se guardan ahí |
 | `session_digest.py` dice que está en modo `--share` | Volvé a correr el paso 1 sin `--share` |
 | Faltan fichas para algunas sesiones | Volvé a correr el paso 2 con `--skip` y clasificá solo esas |
-| El tablero no deja guardar | Falta acceso de editor; pedíselo a Alberto. Si sale "muy grande", recortá hallazgos |
+| El tablero responde 401 | Falta `BUILD101_KEY` o no es válida: corré `agent/claude-code/doctor.py` |

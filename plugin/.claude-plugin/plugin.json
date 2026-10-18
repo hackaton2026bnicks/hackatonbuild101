@@ -1,5 +1,8 @@
 {
   "name": "build101",
-  "version": "0.1.0",
-  "description": "Skills del equipo de build101: /insights para analizar tus sesiones de Claude y sumarlas al equipo, y /puente para escuchar al equipo desde una sesión aparte."
+  "version": "0.2.0",
+  "description": "build101 en cualquier repo: los hooks y el MCP que conectan cada sesión con el equipo y su bóveda, /insights para analizar tus sesiones y /puente para escuchar al equipo.",
+  "author": {
+    "name": "build101"
+  }
 }
