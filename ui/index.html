@@ -94,7 +94,7 @@
     .stage { display: grid; grid-template-columns: repeat(auto-fill, minmax(min(100%, 380px), 1fr)); gap: 14px; }
     .agent {
       --who: var(--muted); --st: var(--k-plan); --glow: var(--g-think);
-      position: relative; display: grid; grid-template-columns: 104px minmax(0, 1fr); gap: 4px 14px;
+      position: relative; display: grid; grid-template-columns: 104px minmax(0, 1fr); gap: 4px 14px; min-width: 0;
       background: var(--surface); border: 1px solid var(--line); border-radius: 14px; padding: 14px 16px 12px 10px;
       transition: border-color .4s, opacity .6s;
     }
@@ -198,7 +198,7 @@
     }
     .label { font-size: 0.68rem; font-weight: 700; letter-spacing: 0.06em; text-transform: uppercase; color: var(--muted); margin-right: 4px; }
 
-    .agent-foot { grid-column: 1 / -1; display: grid; gap: 6px; padding: 8px 0 0 6px; border-top: 1px dashed var(--line); margin-top: 4px; }
+    .agent-foot { grid-column: 1 / -1; display: grid; grid-template-columns: minmax(0, 1fr); gap: 6px; padding: 8px 0 0 6px; border-top: 1px dashed var(--line); margin-top: 4px; }
     .heart svg { display: block; width: 100%; height: auto; }
     .heart .base { stroke: var(--line); stroke-width: 1; }
     .heart .now { fill: var(--st); }
@@ -215,7 +215,7 @@
     .mix { display: flex; align-items: center; gap: 10px; }
     .mixbar { flex: 1; display: flex; height: 7px; border-radius: 99px; overflow: hidden; background: var(--soft); gap: 2px; }
     .mixbar i { background: var(--k); min-width: 3px; transition: flex-grow .6s; }
-    .mixline { font-size: 0.78rem; color: var(--muted); white-space: nowrap; }
+    .mixline { min-width: 0; font-size: 0.78rem; color: var(--muted); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
     .metrics { margin: 2px 0 0; display: flex; flex-wrap: wrap; gap: 4px 16px; }
     .metrics div { display: grid; cursor: help; }
     .metrics dt { font-size: 0.66rem; font-weight: 700; letter-spacing: 0.05em; text-transform: uppercase; color: var(--muted); }
