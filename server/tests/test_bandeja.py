@@ -140,3 +140,16 @@ def test_failed_archivist_retries_then_discards(vault):
 def test_api_base_strips_the_hook_path():
     assert bandeja.api_base({}) == "https://54-89-124-87.sslip.io"
     assert bandeja.api_base({"BUILD101_URL": "http://localhost:8000/"}) == "http://localhost:8000"
+
+
+def test_lesson_that_only_touches_the_log_is_discarded(vault):
+    def run(args, **kwargs):
+        if args[0] != "hermes":
+            return subprocess.run(args, **kwargs)
+        (vault / "privado").mkdir(exist_ok=True)
+        (vault / "privado" / "registro.md").write_text("- 2026-10-18 · nico · mensaje de estado\n")
+        return subprocess.CompletedProcess(args, 0, "Es un aviso de estado, no guardé nada.", "")
+
+    api = FakeApi([LESSON])
+    bandeja.round_once(api, vault, run=run, log=lambda _: None)
+    assert api.closed == [(7, {"descartada": "Es un aviso de estado, no guardé nada."})]

@@ -140,6 +140,11 @@ def changed_notes(vault: Path, run=subprocess.run) -> list[str]:
     return [path for *_, path in sorted(ranked)]
 
 
+def git_changed(vault: Path, folder: str, run=subprocess.run) -> bool:
+    """Algo staged en esa carpeta (MEMORY.md incluido), aunque no sea una nota nueva."""
+    return git(vault, "diff", "--cached", "--quiet", "--", folder, run=run).returncode != 0
+
+
 def file_one(lesson: dict, vault: Path, run=subprocess.run) -> dict | None:
     """Le pasa una lección al archivista y sube lo que escribió. None si falló y hay que reintentar."""
     lesson = normalize(lesson)
@@ -159,10 +164,15 @@ def file_one(lesson: dict, vault: Path, run=subprocess.run) -> dict | None:
     # Solo viajan las carpetas que escribe el archivista; git add falla entero si falta una
     folders = [name for name in ("conocimiento", "privado") if (vault / name).is_dir()]
     git(vault, "add", "--", *folders, run=run)
-    if git(vault, "diff", "--cached", "--quiet", run=run).returncode == 0:
+    if not notes and not git_changed(vault, "conocimiento", run=run):
+        # No escribió ninguna nota (a lo sumo anotó en el registro): es un descarte
         reply = (answer.stdout or "").strip()
         motivo = reply.split("DESCARTADA:", 1)[1].strip() if "DESCARTADA:" in reply else reply
-        return {"descartada": (motivo or "el archivista no escribió nada")[:300]}
+        result = {"descartada": (motivo or "el archivista no escribió ninguna nota")[:300]}
+        if git(vault, "diff", "--cached", "--quiet", run=run).returncode != 0:
+            git(vault, "-c", f"user.name={author}", "commit", "-q", "-m", f"{author}: registro", run=run)
+            git(vault, "push", "-q", run=run)
+        return result
     title = str(lesson.get("titulo") or lesson.get("texto") or "lección")
     message = f"{author}: {' '.join(title.split())[:60]}"
     git(vault, "-c", f"user.name={author}", "commit", "-q", "-m", message, run=run)
