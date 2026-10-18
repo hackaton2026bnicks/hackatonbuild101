@@ -20,7 +20,7 @@ ON CONFLICT (team, session_id) DO UPDATE SET
     last_event_at   = GREATEST(sessions.last_event_at, EXCLUDED.last_event_at),
     last_event_type = EXCLUDED.last_event_type,
     last_summary    = EXCLUDED.last_summary,
-    intent          = COALESCE(EXCLUDED.intent, sessions.intent),
+    intent          = COALESCE(sessions.intent, EXCLUDED.intent),  -- the first real request is the task
     ended_at        = CASE WHEN EXCLUDED.last_event_type = 'session_start' THEN NULL
                            ELSE COALESCE(EXCLUDED.ended_at, sessions.ended_at) END,
     event_count     = sessions.event_count + 1
@@ -239,6 +239,26 @@ class Database:
             )
             return await cur.fetchone()
 
+    async def sessions_in_checkout(
+        self, team: str, user: str, workspace: str, session_id: str, minutes: int
+    ) -> list[dict]:
+        """The person's other live sessions whose shell worked in this checkout lately."""
+        async with self.pool.connection() as conn:
+            cur = await conn.execute(
+                """
+                SELECT r.session_id, s.intent, max(r.last_seen) AS last_seen
+                FROM session_resources r
+                JOIN sessions s ON s.team = r.team AND s.session_id = r.session_id
+                WHERE r.team = %s AND r.user_name = %s AND r.kind = 'workspace' AND r.value = %s
+                  AND r.session_id <> %s AND r.last_seen > now() - make_interval(mins => %s)
+                  AND s.ended_at IS NULL
+                GROUP BY r.session_id, s.intent
+                ORDER BY last_seen DESC
+                """,
+                (team, user, workspace, session_id, minutes),
+            )
+            return await cur.fetchall()
+
     async def already_told(self, team: str, session_id: str, kinds: list[str], topic: str) -> bool:
         """Whether this session already got (or has pending) a message of these kinds on this topic."""
         async with self.pool.connection() as conn:
@@ -351,7 +371,7 @@ class Database:
                 SELECT m.id, m.kind, m.body, m.from_user, m.created_at, m.reply_to
                 FROM messages m
                 WHERE m.team = %s
-                  AND m.kind IN ('discovery', 'alert', 'note', 'question', 'answer', 'overlap')
+                  AND m.kind IN ('discovery', 'alert', 'note', 'question', 'answer', 'overlap', 'workspace')
                   AND m.expires_at > now()
                   AND m.from_session IS DISTINCT FROM %s
                   AND (m.to_session = %s

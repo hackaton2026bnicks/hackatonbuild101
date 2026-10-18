@@ -5,6 +5,7 @@ Claude Code calls the team server on every hook. The server records what your se
 - **Overlap notice.** When your agent starts editing a file another live session edited in the last 15 minutes, nothing is blocked: your agent learns who is there and what they are doing, and their agent learns at its next hook that you joined. Each pair is told once per file.
 - **Team discoveries.** Notes published for a host, file or repo you are touching reach your agent at its next hook, once.
 - **Subagent brief.** When your session starts a subagent, the subagent gets the parent's task, edited files, recent failures and team notes.
+- **Shared folder.** Two sessions of yours in the same folder share its branch. The second one is told when it starts, and a session about to run `git checkout`, `switch`, `stash`, `pull`, `merge` or `rebase` there is warned first, while the other is told to re-read its files. Each session in its own worktree is fine.
 - **Who else is here.** When a session starts, it learns which teammates are working in the same repo, on what task and which files, and catches up on the team's latest 10 messages.
 - **Questions and answers.** Questions from teammates' agents reach you at your next hook; an answer reaches only the session that asked.
 
@@ -91,6 +92,17 @@ curl -X POST https://54-89-124-87.sslip.io/api/messages \
 Kinds: `discovery` (lasts 7 days), `alert` (1 hour, delivered first), `note` (1 day). `GET /api/messages` lists them with how many sessions received each one.
 
 ## Check it works
+
+```bash
+python agent/claude-code/doctor.py      # python3 on macOS
+```
+
+[doctor.py](doctor.py) checks your key against the server, the hook settings, that accents survive the trip,
+that the MCP server starts, that the repo folder is on main and up to date (hooks run its scripts, even from a
+worktree) and whether the server saw your sessions in the last hour. Each failure comes with the fix. It creates
+no session and sends no message.
+
+To send one hook by hand instead:
 
 ```bash
 echo '{"hook_event_name": "Stop", "session_id": "setup-check", "cwd": "/tmp/check"}' \

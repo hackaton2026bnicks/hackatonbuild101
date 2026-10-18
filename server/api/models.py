@@ -1,5 +1,6 @@
 """Request and response models. Event follows the normalized schema in docs/SPEC.md section 3."""
 
+import html
 import json
 import re
 from datetime import datetime
@@ -11,11 +12,13 @@ MAX_PAYLOAD_BYTES = 64 * 1024
 MAX_BATCH = 500
 MAX_MESSAGE_CHARS = 100_000
 SUMMARY_CHARS = 200
-# A prompt shorter than this, or opening like a reply, does not replace the session's task
+# A prompt shorter than this, or opening like a reply, does not state the session's task
 MIN_TASK_WORDS = 3
-# "si"/"no" only count as a reply when punctuated: "Si trabajo ahora…" states a task
+# "si"/"no" only count as a reply when punctuated or followed by a reply phrase: "Si trabajo ahora…" is a task
 FOLLOW_UP = re.compile(
-    r"(?i)^(?:(?:si|no)\s*[,.!]|(?:sí|ok(?:ay)?|dale|listo|bueno|perfecto|genial|yes|yep|sure|go ahead"
+    r"(?i)^(?:(?:si|no)\s*[,.!]|(?:no|sí|si)\s+(?:por ahora|gracias|todav[ií]a|hace falta|dale)\b"
+    r"|(?:por ahora|todav[ií]a) no\b"
+    r"|(?:sí|ok(?:ay)?|dale|listo|bueno|perfecto|genial|gracias|yes|yep|sure|go ahead|thanks"
     r"|continu[aeá]\w*|seguí)\b)"
 )
 
@@ -75,6 +78,7 @@ class Event(BaseModel):
 def states_a_task(prompt: str) -> bool:
     """False for prompts the harness writes (<system-reminder>, <task-notification>, slash commands)
     and for replies to the agent ("sí, dale", "ok, creá la rama"), which would hide the real task."""
+    prompt = html.unescape(prompt)  # some clients send "&lt;system-reminder>"
     if not prompt or prompt.startswith("<"):
         return False
     words = prompt.split()

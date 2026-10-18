@@ -110,6 +110,7 @@ def test_compaction_is_sent_with_its_trigger_but_not_the_instructions():
         "hook_event_name": "PreCompact",
         "session_id": "s1",
         "cwd": "/home/ana/payments",
+        "workspace": "/home/ana/payments",
         "trigger": "auto",
     }
 
@@ -180,3 +181,16 @@ def test_hook_payload_is_read_as_utf8_even_when_the_console_is_cp1252():
     payload = json.dumps({"prompt": "corran el análisis, año"}, ensure_ascii=False).encode("utf-8")
     stdin = io.TextIOWrapper(io.BytesIO(payload), encoding="cp1252")
     assert forward.read_stdin_json(stdin) == {"prompt": "corran el análisis, año"}
+
+
+def test_the_workspace_is_the_worktree_the_shell_is_in_or_else_the_project():
+    project = r"C:\Users\ana\payments"
+    assert forward.workspace(project + r"\server\api", project) == "C:/Users/ana/payments"
+    assert forward.workspace(project + r"\.claude\worktrees\login\server", project) == (
+        "C:/Users/ana/payments/.claude/worktrees/login"
+    )
+    out = forward.sanitize(
+        {"hook_event_name": "Stop", "cwd": "/home/ana/payments/ui"},
+        {"CLAUDE_PROJECT_DIR": "/home/ana/payments"},
+    )
+    assert out["cwd"] == out["workspace"] == "/home/ana/payments"
