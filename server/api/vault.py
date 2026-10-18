@@ -4,21 +4,20 @@ The vault is the source. Hermes' archivista writes it and people edit it in Obsi
 knowledge of its own. It reads the notes every few minutes and answers hooks from memory, because a hook
 has 4 seconds and the consultor (a model) takes longer.
 
-Where the notes come from, in order:
-- VAULT_DIR: a local clone (development and tests).
-- VAULT_REPO ("owner/name") and VAULT_TOKEN: GitHub, read-only. The tarball is downloaded only when the
-  branch moved.
+Where the notes come from:
+- VAULT_DIR: a folder with the vault, read as it is (development and tests).
+- VAULT_GIT: the vault's git URL. The server keeps a shallow clone in VAULT_CLONE_DIR and pulls it on every
+  refresh. In production it is the SSH URL with a read-only deploy key (VAULT_SSH_KEY), which never
+  leaves the server: infra/docker-compose.yml mounts it from the host.
 """
 
 import asyncio
-import io
 import logging
 import os
 import re
-import tarfile
+import subprocess
 import time
 import unicodedata
-import urllib.request
 from dataclasses import dataclass, field
 from pathlib import Path, PurePosixPath
 
@@ -26,7 +25,8 @@ log = logging.getLogger("api.vault")
 
 KNOWLEDGE_DIR = "conocimiento"
 REFRESH_SECONDS = 10 * 60
-GITHUB_TIMEOUT_SECONDS = 30
+GIT_TIMEOUT_SECONDS = 60
+DEFAULT_CLONE_DIR = "/tmp/build101-vault"
 # Index and team pages are not lessons: they are never injected
 NOT_INJECTED = {"moc", "persona"}
 # Notes a session gets per hook, and how many words a prompt or error must share with a note's trigger
@@ -173,33 +173,29 @@ def read_dir(root: Path) -> dict[str, str]:
     }
 
 
-def read_tarball(data: bytes) -> dict[str, str]:
-    """The markdown files under conocimiento/ in a GitHub tarball, whose top folder is owner-repo-sha."""
-    files = {}
-    with tarfile.open(fileobj=io.BytesIO(data), mode="r:gz") as archive:
-        for member in archive.getmembers():
-            parts = PurePosixPath(member.name).parts[1:]
-            if member.isfile() and parts[:1] == (KNOWLEDGE_DIR,) and member.name.endswith(".md"):
-                handle = archive.extractfile(member)
-                if handle:
-                    files[PurePosixPath(*parts).as_posix()] = handle.read().decode("utf-8", errors="replace")
-    return files
-
-
-def github(url: str, token: str, accept: str) -> bytes:
-    req = urllib.request.Request(
-        url, headers={"Authorization": f"Bearer {token}", "Accept": accept, "User-Agent": "build101-api"}
+def git(*args: str, ssh_key: str | None = None) -> str:
+    env = {**os.environ, "GIT_TERMINAL_PROMPT": "0"}
+    if ssh_key:
+        # The key is mounted read-only; known_hosts goes to /tmp so nothing else needs to be writable
+        env["GIT_SSH_COMMAND"] = (
+            f"ssh -i {ssh_key} -o IdentitiesOnly=yes -o StrictHostKeyChecking=accept-new "
+            "-o UserKnownHostsFile=/tmp/build101_known_hosts"
+        )
+    done = subprocess.run(
+        ["git", *args], capture_output=True, text=True, env=env, timeout=GIT_TIMEOUT_SECONDS, check=False
     )
-    with urllib.request.urlopen(req, timeout=GITHUB_TIMEOUT_SECONDS) as response:
-        return response.read()
+    if done.returncode != 0:
+        raise RuntimeError(f"git {args[0]}: {(done.stderr or done.stdout).strip()[-250:]}")
+    return done.stdout.strip()
 
 
 class Vault:
-    def __init__(self, directory: str | None = None, repo: str | None = None, token: str | None = None,
-                 branch: str = "main") -> None:  # fmt: skip
+    def __init__(self, directory: str | None = None, git_url: str | None = None, ssh_key: str | None = None,
+                 clone_dir: str = DEFAULT_CLONE_DIR, branch: str = "main") -> None:  # fmt: skip
         self.directory = directory
-        self.repo = repo
-        self.token = token
+        self.git_url = git_url
+        self.ssh_key = ssh_key
+        self.clone_dir = clone_dir
         self.branch = branch
         self.notes: dict[str, Note] = {}
         self.commit: str | None = None
@@ -210,14 +206,15 @@ class Vault:
     def from_env(cls, environ=os.environ) -> "Vault":
         return cls(
             directory=environ.get("VAULT_DIR") or None,
-            repo=environ.get("VAULT_REPO") or None,
-            token=environ.get("VAULT_TOKEN") or None,
+            git_url=environ.get("VAULT_GIT") or None,
+            ssh_key=environ.get("VAULT_SSH_KEY") or None,
+            clone_dir=environ.get("VAULT_CLONE_DIR") or DEFAULT_CLONE_DIR,
             branch=environ.get("VAULT_BRANCH") or "main",
         )
 
     @property
     def configured(self) -> bool:
-        return bool(self.directory or (self.repo and self.token))
+        return bool(self.directory or self.git_url)
 
     def load(self, files: dict[str, str], commit: str | None = None) -> None:
         notes = {}
@@ -237,21 +234,29 @@ class Vault:
                 changed = {n.path for n in self.notes.values()} != set(files) or self.loaded_at is None
                 self.load(files)
                 return changed
-            if not (self.repo and self.token):
+            if not self.git_url:
                 return False
-            api = f"https://api.github.com/repos/{self.repo}"
-            sha = github(f"{api}/commits/{self.branch}", self.token, "application/vnd.github.sha").decode()
-            sha = sha.strip()
+            sha = self.pull()
             if sha == self.commit:
                 self.loaded_at = time.time()
                 return False
-            data = github(f"{api}/tarball/{sha}", self.token, "application/vnd.github+json")
-            self.load(read_tarball(data), sha)
+            self.load(read_dir(Path(self.clone_dir)), sha)
             return True
         except Exception as error:  # a vault that cannot be read leaves the last good index in place
             self.error = f"{type(error).__name__}: {error}"[:300]
             log.warning("vault refresh failed: %s", self.error)
             return False
+
+    def pull(self) -> str:
+        """Bring the clone to the branch's latest commit and return it. Only the last commit is kept."""
+        clone = Path(self.clone_dir)
+        if not (clone / ".git").is_dir():
+            git("clone", "-q", "--depth", "1", "--branch", self.branch, self.git_url, str(clone),
+                ssh_key=self.ssh_key)  # fmt: skip
+        else:
+            git("-C", str(clone), "fetch", "-q", "--depth", "1", "origin", self.branch, ssh_key=self.ssh_key)
+            git("-C", str(clone), "reset", "-q", "--hard", "FETCH_HEAD")
+        return git("-C", str(clone), "rev-parse", "HEAD")
 
     async def keep_fresh(self) -> None:
         while True:
@@ -264,7 +269,7 @@ class Vault:
             kinds[note.tipo or "?"] = kinds.get(note.tipo or "?", 0) + 1
         return {
             "configured": self.configured,
-            "source": self.directory and "dir" or (self.repo and f"github:{self.repo}") or None,
+            "source": "dir" if self.directory else "git" if self.git_url else None,
             "commit": self.commit,
             "loaded_at": self.loaded_at,
             "error": self.error,

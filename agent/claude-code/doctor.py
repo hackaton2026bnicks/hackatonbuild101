@@ -211,7 +211,7 @@ def check_vault(report: Report, environ: dict) -> None:
     except (urllib.error.URLError, OSError, ValueError):
         return
     if not vault.get("configured"):
-        report.warn("The server has no team vault connected", "Ask Nico: the server has no VAULT_TOKEN.")
+        report.warn("The server has no team vault connected", "Ask Nico: the server has no VAULT_GIT.")
     elif vault.get("error") and not vault.get("notes"):
         report.bad("The server cannot read the team vault", vault["error"])
     else:

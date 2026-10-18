@@ -46,7 +46,7 @@ Lo que el índice lee de cada nota: `tipo`, `tags`, `autor`, `actualizado`, `apl
 
 - [ ] Molle: darle a Nico y al server acceso de lectura a `build101-vault`
 - [ ] Molle: una entrada para que el cierre de sesión le mande lecciones al archivista, como un `guardar` remoto
-- [x] Nico: que el server lea la bóveda, la actualice cada 10 minutos e indexe `conocimiento/` (`server/api/vault.py`; falta cargar `VAULT_TOKEN` en el server)
+- [x] Nico: que el server lea la bóveda, la actualice cada 10 minutos e indexe `conocimiento/` (`server/api/vault.py`, con la deploy key de solo lectura que vive en el EC2)
 - [x] Nico: que los hooks de inicio, de pedido, de archivo y de error lean de ese índice, más la tool `team_knowledge` del MCP
 - [x] Nico: que `learn.py` mande las lecciones a la cola del server (`POST /lessons`), de donde las levanta `agent/hermes/bandeja.py` de Molle; los `share_discovery` también entran
 - [ ] Nico y Molle: probar el ciclo completo
