@@ -6,7 +6,7 @@
   <title>build101 team room</title>
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-  <link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;600&family=Schibsted+Grotesk:wght@400;500;700;800&display=swap" rel="stylesheet">
+  <link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;600;700&family=Schibsted+Grotesk:wght@400;500;700;800&display=swap" rel="stylesheet">
   <style>
     :root {
       --paper: #edf0f3; --surface: #ffffff; --ink: #1b2230; --muted: #5b6577; --line: #d3d9e1; --soft: #f5f7f9;
@@ -14,6 +14,13 @@
       --amber: #a86500; --amber-bg: #fff1d1; --amber-line: #f0c46a;
       --bad: #b4312a;
       --p0: #2563eb; --p1: #059669; --p2: #9333ea; --p3: #db2777; --p4: #0891b2; --p5: #65a30d;
+      /* What an action is about: reading, writing, running, talking, delegating, planning */
+      --k-explore: #0e7490; --k-build: #2563eb; --k-run: #b45309; --k-talk: #7c3aed; --k-delegate: #c026d3;
+      --k-plan: #64748b; --k-error: #dc2626; --k-human: #1b2230; --k-wait: #15803d;
+      /* Eye glow on the bots' dark visor, same in both themes */
+      --g-run: #fcd34d; --g-edit: #93c5fd; --g-read: #67e8f9; --g-talk: #c4b5fd; --g-delegate: #f5d0fe;
+      --g-think: #e2e8f0; --g-wait: #86efac; --g-error: #fca5a5; --g-sleep: #64748b;
+      --visor: #121826;
       color-scheme: light;
     }
     @media (prefers-color-scheme: dark) {
@@ -23,6 +30,9 @@
         --amber: #f5b841; --amber-bg: #3a2c0f; --amber-line: #7a5a18;
         --bad: #f08a82;
         --p0: #6b9bff; --p1: #34d399; --p2: #c084fc; --p3: #f472b6; --p4: #22d3ee; --p5: #a3e635;
+        --k-explore: #22d3ee; --k-build: #7aa2ff; --k-run: #fbbf24; --k-talk: #c4a1ff; --k-delegate: #f0abfc;
+        --k-plan: #94a3b8; --k-error: #f87171; --k-human: #e4e8ee; --k-wait: #4ade80;
+        --visor: #0b0f17;
         color-scheme: dark;
       }
     }
@@ -60,24 +70,238 @@
     h2 { font-size: 1.05rem; font-weight: 700; margin: 0; letter-spacing: -0.01em; }
     .section-head { display: flex; align-items: baseline; gap: 12px; flex-wrap: wrap; margin-bottom: 12px; }
     .section-head p { margin: 0; font-size: 0.88rem; }
-
-    /* Roster: one strip per live session */
-    .roster { display: grid; grid-template-columns: repeat(auto-fill, minmax(260px, 1fr)); gap: 12px; }
-    .person {
-      background: var(--surface); border: 1px solid var(--line); border-left: 5px solid var(--who);
-      border-radius: 4px 8px 8px 4px; padding: 12px 14px; min-width: 0;
-    }
-    .person header { display: flex; align-items: baseline; gap: 8px; }
-    .person strong { font-size: 1rem; }
-    .person .when { margin-left: auto; font-size: 0.8rem; }
-    .person .task { margin: 4px 0 6px; font-size: 0.92rem; overflow-wrap: anywhere; }
-    .person .last { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; color: var(--muted); }
-    .person.idle { opacity: 0.62; }
     .tag { font-size: 0.75rem; padding: 0 7px; border-radius: 99px; background: var(--soft); border: 1px solid var(--line); color: var(--muted); }
 
-    /* Two columns: the file map is the hero, the thread sits beside it */
+    /* Room pulse: one sentence and the numbers behind it */
+    .pulse { display: grid; gap: 14px; }
+    .headline { font-size: 1.45rem; line-height: 1.25; font-weight: 800; letter-spacing: -0.025em; margin: 0; max-width: 60ch; }
+    .headline em { font-style: normal; color: var(--k-wait); }
+    .headline .bad { color: var(--k-error); }
+    .tiles { display: flex; gap: 10px; flex-wrap: wrap; }
+    .tile {
+      display: grid; gap: 0; min-width: 118px; padding: 9px 14px 10px; text-align: left;
+      background: var(--surface); border: 1px solid var(--line); border-radius: 10px;
+    }
+    .tile b { font-size: 1.55rem; line-height: 1.1; font-weight: 800; font-variant-numeric: tabular-nums; letter-spacing: -0.02em; }
+    .tile span { font-size: 0.8rem; color: var(--muted); }
+    button.tile { cursor: default; }
+    .tile.go.lit { cursor: pointer; border-color: var(--k-wait); background: color-mix(in srgb, var(--k-wait) 9%, var(--surface)); }
+    .tile.go.lit b { color: var(--k-wait); }
+    .tile.bad.lit { border-color: color-mix(in srgb, var(--k-error) 55%, var(--line)); }
+    .tile.bad.lit b { color: var(--k-error); }
+
+    /* Stage: one bot per live session */
+    .stage { display: grid; grid-template-columns: repeat(auto-fill, minmax(min(100%, 380px), 1fr)); gap: 14px; }
+    .agent {
+      --who: var(--muted); --st: var(--k-plan); --glow: var(--g-think);
+      position: relative; display: grid; grid-template-columns: 104px minmax(0, 1fr); gap: 4px 14px;
+      background: var(--surface); border: 1px solid var(--line); border-radius: 14px; padding: 14px 16px 12px 10px;
+      transition: border-color .4s, opacity .6s;
+    }
+    .agent.selected { outline: 2px solid var(--accent); outline-offset: 2px; }
+    .st-run { --st: var(--k-run); --glow: var(--g-run); }
+    .st-edit { --st: var(--k-build); --glow: var(--g-edit); }
+    .st-read { --st: var(--k-explore); --glow: var(--g-read); }
+    .st-talk { --st: var(--k-talk); --glow: var(--g-talk); }
+    .st-delegate { --st: var(--k-delegate); --glow: var(--g-delegate); }
+    .st-think, .st-plan, .st-start { --st: var(--k-plan); --glow: var(--g-think); }
+    .st-wait { --st: var(--k-wait); --glow: var(--g-wait); }
+    .st-error { --st: var(--k-error); --glow: var(--g-error); border-color: color-mix(in srgb, var(--k-error) 45%, var(--line)); }
+    .st-sleep { --st: var(--muted); --glow: var(--g-sleep); }
+    .agent.st-sleep { opacity: 0.72; }
+    .agent.st-wait.mine { border-color: var(--k-wait); }
+
+    .bot-wrap { position: relative; align-self: start; }
+    .bot { width: 104px; height: 104px; display: block; overflow: visible; }
+    .bot .shadow { fill: color-mix(in srgb, var(--ink) 12%, transparent); }
+    .bot .head { fill: var(--who); }
+    .bot .ear { fill: color-mix(in srgb, var(--who) 70%, #000); }
+    .bot .gloss { fill: none; stroke: #fff; stroke-opacity: .35; stroke-width: 3; stroke-linecap: round; }
+    .bot .stalk { stroke: color-mix(in srgb, var(--who) 70%, #000); stroke-width: 3; stroke-linecap: round; }
+    .bot .bulb { fill: var(--glow); stroke: color-mix(in srgb, var(--who) 70%, #000); stroke-width: 2; }
+    .bot .visor { fill: var(--visor); }
+    .bot .eyes-open rect { fill: var(--glow); }
+    .bot .eyes path { fill: none; stroke: var(--glow); stroke-width: 3.2; stroke-linecap: round; }
+    .bot .mouth { fill: none; stroke: color-mix(in srgb, var(--who) 55%, #000); stroke-width: 2.6; stroke-linecap: round; }
+    .bot .mouth-grin, .bot .mouth-o { fill: color-mix(in srgb, var(--who) 50%, #000); }
+    .bot .eyes, .bot .mouth, .bot .prop, .bot .waves, .bot .mini { display: none; }
+    .bot .eyes-open, .bot .mouth-smile { display: inline; }
+    .st-wait .eyes-open, .st-sleep .eyes-open, .st-error .eyes-open { display: none; }
+    .st-wait .eyes-happy, .st-sleep .eyes-shut, .st-error .eyes-x { display: inline; }
+    .st-wait .mouth-smile, .st-sleep .mouth-smile, .st-error .mouth-smile { display: none; }
+    .st-wait .mouth-grin, .st-sleep .mouth-o, .st-error .mouth-wobble { display: inline; }
+    .st-run .p-run, .st-edit .p-edit, .st-read .p-read, .st-wait .p-wait, .st-error .p-error,
+    .st-think .p-think, .st-plan .p-think, .st-start .p-think, .st-sleep .p-sleep, .st-talk .waves { display: inline; }
+    .bot.h1 .m1, .bot.h2 .m1, .bot.h2 .m2, .bot.h3 .mini { display: inline; }
+    .bot .mini circle { fill: var(--who); stroke: var(--surface); stroke-width: 2; }
+    .bot .mini .mini-eye { fill: var(--g-delegate); stroke: none; }
+    .bot .waves path { fill: none; stroke: var(--glow); stroke-width: 2.4; stroke-linecap: round; }
+    .bot .p-run rect:first-child { fill: var(--visor); stroke: var(--glow); stroke-width: 2; }
+    .bot .p-run text { fill: var(--glow); font: 700 12px "JetBrains Mono", monospace; }
+    .bot .p-run .cursor { fill: var(--glow); }
+    .bot .pencil .wood { fill: #f59e0b; }
+    .bot .pencil .tip { fill: #fde68a; }
+    .bot .pencil .lead { fill: #1f2937; }
+    .bot .pencil .eraser { fill: #f472b6; }
+    .bot .scrawl { fill: none; stroke: var(--glow); stroke-width: 2; stroke-linecap: round; stroke-dasharray: 40; }
+    .bot .p-read circle { fill: color-mix(in srgb, var(--glow) 30%, transparent); stroke: var(--ink); stroke-width: 3; }
+    .bot .p-read line { stroke: var(--ink); stroke-width: 4.5; stroke-linecap: round; }
+    .bot .p-wait .arm { fill: none; stroke: color-mix(in srgb, var(--who) 70%, #000); stroke-width: 5; stroke-linecap: round; }
+    .bot .p-wait .hand { fill: var(--who); stroke: color-mix(in srgb, var(--who) 70%, #000); stroke-width: 2; }
+    .bot .p-error { fill: #7dd3fc; stroke: #0369a1; stroke-width: 1; }
+    .bot .p-think circle { fill: var(--muted); }
+    .bot .p-sleep text { fill: var(--muted); font: 700 11px "JetBrains Mono", monospace; }
+    .bot .p-sleep .z2 { font-size: 14px; }
+    .bot .p-sleep .z3 { font-size: 17px; }
+    .st-sleep .bot .body { filter: saturate(.35); }
+    /* Transform origins for the bits that move */
+    .bot .body { transform-box: view-box; transform-origin: 60px 104px; }
+    .bot .eyes-open rect { transform-box: fill-box; transform-origin: center; }
+    .bot .orbit { transform-box: view-box; transform-origin: 60px 58px; }
+    .bot .pencil { transform-box: view-box; transform-origin: 101px 90px; }
+    .bot .p-wait { transform-box: view-box; transform-origin: 96px 72px; }
+    .bot .p-sleep text, .bot .p-error, .bot .p-read { transform-box: fill-box; transform-origin: center; }
+
+    .spark {
+      position: absolute; left: 50%; top: 2px; width: 8px; height: 8px; border-radius: 50%;
+      background: var(--k); pointer-events: none; opacity: 0;
+    }
+
+    .agent-main { min-width: 0; display: grid; gap: 7px; align-content: start; }
+    .agent-head { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
+    .nick {
+      background: none; border: 0; padding: 0; font-weight: 800; font-size: 1.08rem; letter-spacing: -0.01em;
+      text-decoration: underline transparent; text-underline-offset: 3px; transition: text-decoration-color .2s;
+    }
+    .nick:hover { text-decoration-color: currentColor; }
+    .owner { color: var(--muted); font-size: 0.88rem; }
+    .owner b { color: var(--who); font-weight: 700; }
+    .pill {
+      margin-left: auto; display: inline-flex; align-items: center; gap: 6px; padding: 1px 10px 1px 8px;
+      border-radius: 99px; font-size: 0.78rem; font-weight: 700; white-space: nowrap;
+      color: var(--st); background: color-mix(in srgb, var(--st) 12%, var(--surface));
+      border: 1px solid color-mix(in srgb, var(--st) 35%, transparent);
+    }
+    .pill i { width: 7px; height: 7px; border-radius: 50%; background: currentColor; }
+    .bubble {
+      position: relative; background: var(--soft); border: 1px solid var(--line); border-radius: 12px; padding: 7px 12px 8px;
+    }
+    .bubble::before {
+      content: ""; position: absolute; left: -7px; top: 16px; width: 12px; height: 12px; background: var(--soft);
+      border-left: 1px solid var(--line); border-bottom: 1px solid var(--line); transform: rotate(45deg);
+    }
+    .say { margin: 0; font-weight: 700; font-size: 0.98rem; overflow-wrap: anywhere; }
+    .sub { margin: 0; min-height: 1.2em; font-size: 0.78rem; color: var(--muted); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+    .mission {
+      margin: 0; font-size: 0.86rem; color: var(--muted); overflow-wrap: anywhere;
+      display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden;
+    }
+    .label { font-size: 0.68rem; font-weight: 700; letter-spacing: 0.06em; text-transform: uppercase; color: var(--muted); margin-right: 4px; }
+
+    .agent-foot { grid-column: 1 / -1; display: grid; gap: 6px; padding: 8px 0 0 6px; border-top: 1px dashed var(--line); margin-top: 4px; }
+    .heart svg { display: block; width: 100%; height: auto; }
+    .heart .base { stroke: var(--line); stroke-width: 1; }
+    .heart .now { fill: var(--st); }
+    .axis { display: flex; justify-content: space-between; font-size: 0.7rem; color: var(--muted); margin-top: -2px; }
+    .k-explore { fill: var(--k-explore); --k: var(--k-explore); }
+    .k-build { fill: var(--k-build); --k: var(--k-build); }
+    .k-run { fill: var(--k-run); --k: var(--k-run); }
+    .k-talk { fill: var(--k-talk); --k: var(--k-talk); }
+    .k-delegate { fill: var(--k-delegate); --k: var(--k-delegate); }
+    .k-plan { fill: var(--k-plan); --k: var(--k-plan); }
+    .k-error { fill: var(--k-error); --k: var(--k-error); }
+    .k-human { fill: var(--k-human); --k: var(--k-human); }
+    .k-wait { fill: var(--k-wait); --k: var(--k-wait); }
+    .mix { display: flex; align-items: center; gap: 10px; }
+    .mixbar { flex: 1; display: flex; height: 7px; border-radius: 99px; overflow: hidden; background: var(--soft); gap: 2px; }
+    .mixbar i { background: var(--k); min-width: 3px; transition: flex-grow .6s; }
+    .mixline { font-size: 0.78rem; color: var(--muted); white-space: nowrap; }
+    .metrics { margin: 2px 0 0; display: flex; flex-wrap: wrap; gap: 4px 16px; }
+    .metrics div { display: grid; cursor: help; }
+    .metrics dt { font-size: 0.66rem; font-weight: 700; letter-spacing: 0.05em; text-transform: uppercase; color: var(--muted); }
+    .metrics dd { margin: 0; font-weight: 800; font-size: 0.98rem; font-variant-numeric: tabular-nums; }
+    .metrics .hot dd { color: var(--k-error); }
+
+    .stage-empty {
+      display: grid; grid-template-columns: 104px minmax(0, 1fr); gap: 14px; align-items: center;
+      background: var(--surface); border: 1px dashed var(--line); border-radius: 14px; padding: 16px;
+    }
+    .stage-empty strong { display: block; }
+
+    /* Scorecard and insights */
+    .score { display: grid; gap: 14px; }
+    .score-table { background: var(--surface); border: 1px solid var(--line); border-radius: 10px; overflow-x: auto; }
+    .score-table table { width: 100%; border-collapse: collapse; font-size: 0.88rem; }
+    .score-table th, .score-table td { padding: 8px 14px; text-align: right; white-space: nowrap; }
+    .score-table th:first-child, .score-table td:first-child { text-align: left; }
+    .score-table thead th { font-size: 0.7rem; letter-spacing: 0.05em; text-transform: uppercase; color: var(--muted); font-weight: 700; border-bottom: 1px solid var(--line); cursor: help; }
+    .score-table abbr { text-decoration: none; color: var(--ink); margin-left: 2px; }
+    .score-table tbody td { border-bottom: 1px solid color-mix(in srgb, var(--line) 60%, transparent); font-variant-numeric: tabular-nums; }
+    .score-table tbody tr:last-child td { border-bottom: 0; }
+    .score-table tr.team td { font-weight: 700; background: var(--soft); }
+    .score-table .person { display: inline-flex; align-items: center; gap: 8px; font-weight: 700; }
+    .score-table .person i { width: 10px; height: 10px; border-radius: 50%; background: var(--who); }
+    .kbar { display: inline-block; width: 46px; height: 6px; margin-left: 8px; border-radius: 99px; background: var(--soft); border: 1px solid var(--line); vertical-align: middle; overflow: hidden; }
+    .kbar i { display: block; height: 100%; background: var(--k-wait); }
+    .score-table .hot { color: var(--k-error); font-weight: 700; }
+    .insights { list-style: none; margin: 0; padding: 0; display: grid; grid-template-columns: repeat(auto-fill, minmax(min(100%, 300px), 1fr)); gap: 10px; }
+    .insight { background: var(--surface); border: 1px solid var(--line); border-radius: 10px; padding: 10px 14px 12px; display: grid; gap: 4px; align-content: start; }
+    .insight header { display: flex; align-items: center; gap: 8px; }
+    .insight .ibadge { font-size: 0.68rem; font-weight: 800; letter-spacing: 0.06em; text-transform: uppercase; padding: 1px 8px; border-radius: 99px; color: var(--ib); background: color-mix(in srgb, var(--ib) 12%, var(--surface)); border: 1px solid color-mix(in srgb, var(--ib) 35%, transparent); }
+    .insight .itype { font-size: 0.74rem; color: var(--muted); }
+    .insight strong { font-size: 0.95rem; line-height: 1.3; }
+    .insight p { margin: 0; font-size: 0.85rem; color: var(--muted); overflow-wrap: anywhere; }
+    .insight .act-line { color: var(--ink); }
+    .i-tool { --ib: var(--k-run); } .i-rule { --ib: var(--k-build); } .i-hook { --ib: var(--k-error); }
+    .i-copy { --ib: var(--k-wait); } .i-build { --ib: var(--k-delegate); } .i-notify { --ib: var(--k-talk); }
+    .fine { margin: 0; font-size: 0.78rem; }
+
+    /* Play-by-play */
+    .feed-tools { display: flex; gap: 6px; align-items: center; flex-wrap: wrap; margin-left: auto; }
+    .chipbtn { font-size: 0.8rem; padding: 2px 10px; border-radius: 99px; border: 1px solid var(--line); background: var(--surface); }
+    .chipbtn[aria-pressed="true"] { border-color: var(--ink); background: var(--soft); font-weight: 700; }
+    .plays {
+      list-style: none; margin: 0; padding: 4px 0; background: var(--surface); border: 1px solid var(--line);
+      border-radius: 10px; max-height: 380px; overflow-y: auto;
+    }
+    .act {
+      display: grid; grid-template-columns: 62px 96px 18px minmax(0, 1fr) auto; gap: 10px; align-items: center;
+      padding: 5px 14px; font-size: 0.86rem; border-bottom: 1px solid color-mix(in srgb, var(--line) 60%, transparent);
+    }
+    .act:last-child { border-bottom: 0; }
+    .act time { font-size: 0.76rem; color: var(--muted); font-variant-numeric: tabular-nums; }
+    .act .who { display: flex; align-items: center; gap: 6px; font-weight: 600; overflow: hidden; white-space: nowrap; text-overflow: ellipsis; }
+    .act .who i { flex: none; width: 9px; height: 9px; border-radius: 50%; background: var(--who); }
+    .act .ic { color: var(--k); display: flex; }
+    .act .ic svg { width: 15px; height: 15px; fill: none; stroke: currentColor; stroke-width: 1.6; stroke-linecap: round; stroke-linejoin: round; }
+    .act .txt { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+    .act .txt .muted { margin-left: 6px; }
+    .act.k-human .txt { font-style: italic; }
+    .act.k-error, .act.s-error { background: color-mix(in srgb, var(--k-error) 7%, transparent); }
+    .act.k-wait .txt { color: var(--k-wait); font-weight: 600; }
+    .res { font-size: 0.76rem; color: var(--muted); white-space: nowrap; font-variant-numeric: tabular-nums; max-width: 34ch; overflow: hidden; text-overflow: ellipsis; }
+    .res.ok::before { content: "✓ "; color: var(--k-wait); font-weight: 700; }
+    .res.error { color: var(--k-error); font-weight: 600; }
+    .res.error::before { content: "✗ "; }
+    .res.running { color: var(--k-run); font-weight: 600; }
+    .act.fresh-row { animation: none; }
+
+    /* Two columns: the file map sits beside the thread */
     .split { display: grid; grid-template-columns: minmax(0, 7fr) minmax(0, 5fr); gap: 28px; align-items: start; }
     @media (max-width: 960px) { .split { grid-template-columns: 1fr; } main { padding: 16px; } .bar { padding: 12px 16px; } }
+    @media (max-width: 560px) {
+      .agent { grid-template-columns: 72px minmax(0, 1fr); }
+      .bot { width: 72px; height: 72px; }
+      .stage-empty { grid-template-columns: 72px minmax(0, 1fr); }
+      .act { grid-template-columns: 64px minmax(0, 1fr) auto; padding: 5px 10px; }
+      .act .who, .act .ic { display: none; }
+      .res { max-width: 12ch; }
+      .headline { font-size: 1.2rem; }
+      .tiles { gap: 8px; }
+      .tile { min-width: 0; flex: 1 1 28%; padding: 7px 10px 8px; }
+      .tile b { font-size: 1.25rem; }
+      .tile span { font-size: 0.74rem; line-height: 1.25; }
+    }
 
     .map { background: var(--surface); border: 1px solid var(--line); border-radius: 8px; overflow: hidden; }
     .map ol { list-style: none; margin: 0; padding: 0; }
@@ -94,7 +318,7 @@
     .dot.edit { background: var(--who); }
     .file.meet { background: var(--amber-bg); border-bottom-color: var(--amber-line); }
     .file.meet .note { grid-column: 1 / -1; color: var(--amber); font-size: 0.84rem; font-weight: 500; margin-top: -2px; }
-    .legend { display: flex; gap: 16px; align-items: center; font-size: 0.82rem; color: var(--muted); }
+    .legend { display: flex; gap: 16px; align-items: center; font-size: 0.82rem; color: var(--muted); flex-wrap: wrap; }
     .legend span { display: inline-flex; gap: 6px; align-items: center; }
     .legend .dot { --who: var(--muted); width: 11px; height: 11px; border-width: 2px; }
     .legend .swatch { width: 14px; height: 10px; background: var(--amber-bg); border: 1px solid var(--amber-line); border-radius: 2px; }
@@ -137,12 +361,6 @@
     .empty { padding: 22px 16px; color: var(--muted); }
     .empty strong { color: var(--ink); display: block; margin-bottom: 2px; }
 
-    details.activity { background: var(--surface); border: 1px solid var(--line); border-radius: 8px; padding: 10px 16px; }
-    details.activity summary { cursor: pointer; font-weight: 600; }
-    #feed { list-style: none; margin: 10px 0 0; padding: 0; max-height: 320px; overflow-y: auto; }
-    #feed li { padding: 5px 0; border-top: 1px solid var(--line); display: grid; grid-template-columns: 70px 110px minmax(0, 1fr); gap: 10px; font-size: 0.85rem; }
-    #feed li .mono { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-
     /* Sign in */
     .signin { max-width: 460px; margin: 12vh auto; padding: 0 16px; }
     .signin h1 { font-size: 2.1rem; line-height: 1.1; letter-spacing: -0.03em; margin: 0 0 10px; font-weight: 800; }
@@ -150,9 +368,72 @@
     .signin form { display: flex; gap: 8px; }
     .signin input { flex: 1; padding: 9px 12px; border: 1px solid var(--line); border-radius: 6px; background: var(--surface); }
     .error { color: var(--bad); font-size: 0.9rem; }
+
     @media (prefers-reduced-motion: no-preference) {
       .fresh { animation: fresh 1.6s ease-out; }
       @keyframes fresh { from { box-shadow: 0 0 0 3px color-mix(in srgb, var(--who) 45%, transparent); } to { box-shadow: 0 0 0 3px transparent; } }
+
+      .bot .eyes-open rect { animation: blink 5.2s infinite; animation-delay: var(--blink, 0s); }
+      .st-run .bot .body { animation: bob .42s ease-in-out infinite alternate; }
+      .st-run .bot .bulb, .st-run .p-run .cursor { animation: flick .7s steps(2, jump-none) infinite; }
+      .st-edit .bot .body { animation: bob 1.2s ease-in-out infinite alternate; }
+      .st-edit .pencil { animation: scribble .32s ease-in-out infinite alternate; }
+      .st-edit .scrawl { animation: draw 1.3s linear infinite; }
+      .st-edit .eyes-open { transform: translateY(3px); }
+      .st-read .eyes-open { animation: scan 2.2s ease-in-out infinite; }
+      .st-read .p-read { animation: lens 2.2s ease-in-out infinite; }
+      .st-talk .waves path { animation: ping 1.3s ease-out infinite; }
+      .st-talk .waves path:nth-child(n+3) { animation-delay: .35s; }
+      .st-talk .bot .body { animation: bob .9s ease-in-out infinite alternate; }
+      .st-delegate .bot .body { animation: sway 2.4s ease-in-out infinite; }
+      .st-think .bot .body, .st-plan .bot .body { animation: sway 3.2s ease-in-out infinite; }
+      .st-think .eyes-open, .st-plan .eyes-open { transform: translate(3px, -3px); }
+      .p-think circle { animation: dot 1.5s infinite; }
+      .p-think circle:nth-child(2) { animation-delay: .25s; }
+      .p-think circle:nth-child(3) { animation-delay: .5s; }
+      .st-wait .bot .body { animation: hop 2.6s ease-in-out infinite; }
+      .st-wait .p-wait { animation: wave 1.1s ease-in-out infinite; }
+      .st-wait .bot .bulb { animation: glow 1.6s ease-in-out infinite; }
+      .agent.st-wait.mine { animation: ring 2.6s ease-out infinite; }
+      .st-error .p-error { animation: drip 1.5s ease-in infinite; }
+      .st-sleep .bot .body { animation: breathe 4.2s ease-in-out infinite; }
+      .st-sleep .p-sleep text { animation: zzz 3.6s ease-out infinite; }
+      .st-sleep .p-sleep .z2 { animation-delay: 1.2s; }
+      .st-sleep .p-sleep .z3 { animation-delay: 2.4s; }
+      .st-start .bot .body { animation: boot 1.1s cubic-bezier(.2, .9, .3, 1.2); }
+      .bot .orbit { animation: orbit 7s linear infinite; }
+      .jolt .bot .body { animation: shake .45s ease-in-out 2; }
+      .agent.enter { animation: pop .55s cubic-bezier(.2, .9, .3, 1.25); }
+      .say.typing { animation: type .55s steps(22, end); }
+      .spark { animation: spark 1.1s ease-out forwards; }
+      .tile b.bump { animation: bump .5s ease-out; }
+      .res.running .spin { display: inline-block; width: 8px; height: 8px; margin-right: 5px; border-radius: 50%; border: 2px solid currentColor; border-right-color: transparent; animation: orbit .8s linear infinite; vertical-align: -1px; }
+
+      @keyframes blink { 0%, 94%, 100% { transform: scaleY(1); } 96.5% { transform: scaleY(.08); } }
+      @keyframes bob { from { transform: translateY(0); } to { transform: translateY(-3.5px); } }
+      @keyframes flick { 50% { opacity: .25; } }
+      @keyframes scribble { from { transform: rotate(-7deg); } to { transform: rotate(7deg); } }
+      @keyframes draw { from { stroke-dashoffset: 40; } to { stroke-dashoffset: 0; } }
+      @keyframes scan { 0%, 100% { transform: translateX(-4px); } 50% { transform: translateX(4px); } }
+      @keyframes lens { 0%, 100% { transform: translate(0, 0); } 50% { transform: translate(-7px, -3px); } }
+      @keyframes ping { 0% { opacity: 0; } 35% { opacity: 1; } 100% { opacity: 0; } }
+      @keyframes sway { 0%, 100% { transform: rotate(-2.5deg); } 50% { transform: rotate(2.5deg); } }
+      @keyframes dot { 0%, 100% { opacity: .2; } 40% { opacity: 1; } }
+      @keyframes hop { 0%, 58%, 100% { transform: translateY(0); } 68% { transform: translateY(-9px); } 78% { transform: translateY(0); } 85% { transform: translateY(-3px); } 92% { transform: translateY(0); } }
+      @keyframes wave { 0%, 100% { transform: rotate(-16deg); } 50% { transform: rotate(18deg); } }
+      @keyframes glow { 50% { filter: drop-shadow(0 0 5px var(--glow)); } }
+      @keyframes ring { 0% { box-shadow: 0 0 0 0 color-mix(in srgb, var(--k-wait) 40%, transparent); } 70%, 100% { box-shadow: 0 0 0 12px transparent; } }
+      @keyframes drip { 0% { transform: translateY(-3px); opacity: 0; } 20% { opacity: 1; } 100% { transform: translateY(14px); opacity: 0; } }
+      @keyframes breathe { 0%, 100% { transform: scale(1, 1); } 50% { transform: scale(1.025, .975); } }
+      @keyframes zzz { 0% { opacity: 0; transform: translate(0, 5px); } 25% { opacity: 1; } 100% { opacity: 0; transform: translate(7px, -9px); } }
+      @keyframes boot { 0% { transform: translateY(16px) scale(.85); opacity: 0; } 60% { transform: translateY(-4px) scale(1.03); opacity: 1; } 100% { transform: none; } }
+      @keyframes orbit { to { transform: rotate(360deg); } }
+      @keyframes shake { 0%, 100% { transform: translateX(0); } 20% { transform: translateX(-5px) rotate(-4deg); } 40% { transform: translateX(5px) rotate(4deg); } 60% { transform: translateX(-3px); } 80% { transform: translateX(3px); } }
+      @keyframes pop { from { transform: scale(.94); opacity: 0; } to { transform: none; opacity: 1; } }
+      @keyframes type { from { clip-path: inset(0 100% 0 0); } to { clip-path: inset(0 0 0 0); } }
+      @keyframes spark { 0% { transform: translate(-50%, 0) scale(1); opacity: 1; } 100% { transform: translate(calc(-50% + var(--dx, 0px)), -40px) scale(.3); opacity: 0; } }
+      @keyframes bump { 0% { transform: scale(1); } 40% { transform: scale(1.18); } 100% { transform: scale(1); } }
+      .tile b { display: inline-block; transform-origin: left center; }
     }
   </style>
 </head>
@@ -186,12 +467,63 @@
   </div>
 
   <main>
-    <section aria-labelledby="h-roster">
-      <div class="section-head">
-        <h2 id="h-roster">Working now</h2>
-        <p class="muted" id="roster-note"></p>
+    <section class="pulse" aria-labelledby="headline">
+      <h1 class="headline" id="headline" aria-live="polite">Looking around the room…</h1>
+      <div class="tiles">
+        <div class="tile"><b id="t-live">0</b><span>agents in this repo</span></div>
+        <button class="tile go" id="t-wait-tile" type="button"><b id="t-wait">0</b><span>waiting for you</span></button>
+        <div class="tile"><b id="t-busy">0</b><span>working right now</span></div>
+        <div class="tile bad" id="t-err-tile"><b id="t-err">0</b><span>errors, last 10 min</span></div>
+        <div class="tile"><b id="t-apm">0</b><span>actions a minute</span></div>
       </div>
-      <div class="roster" id="roster"></div>
+    </section>
+
+    <section aria-label="Agents">
+      <div class="stage" id="stage"></div>
+    </section>
+
+    <section aria-labelledby="h-score">
+      <div class="section-head">
+        <h2 id="h-score">How the team works with Claude</h2>
+        <p class="muted" id="score-note">Every repo. The numbers and detectors of DIK-INSIGHTS, from the hooks.</p>
+        <div class="feed-tools" role="group" aria-label="Period">
+          <button class="chipbtn" type="button" data-period="1440" aria-pressed="true">24 h</button>
+          <button class="chipbtn" type="button" data-period="10080" aria-pressed="false">7 days</button>
+        </div>
+      </div>
+      <div class="score">
+        <div class="score-table">
+          <table>
+            <thead>
+              <tr>
+                <th scope="col">Person</th>
+                <th scope="col" title="Sessions with at least one action in the period">Sessions</th>
+                <th scope="col" title="H: time with events less than 5 minutes apart">Active</th>
+                <th scope="col" title="L, leverage: Claude's actions, helpers included, for each prompt a person wrote">Per prompt <abbr>L</abbr></th>
+                <th scope="col" title="K, capitalization: share of non-trivial actions that went through a reusable asset (skill, repo script, domain MCP) instead of an ad hoc one (Python one-off, ssh, curl, browser, raw SQL)">Reusable <abbr>K</abbr></th>
+                <th scope="col" title="F, friction: (errors + 3 × corrections) every 100 actions. Compactions and rejections are not in the hooks yet">Friction <abbr>F</abbr></th>
+                <th scope="col" title="Share of actions that failed">Errors</th>
+                <th scope="col" title="Time agents sat finished waiting for this person; each wait counted up to an hour">Agents waited</th>
+              </tr>
+            </thead>
+            <tbody id="score-body"></tbody>
+          </table>
+        </div>
+        <ol class="insights" id="insights"></ol>
+        <p class="fine muted">Not measured yet, because the hooks don't send it: tokens and cost (C), compactions, which skill or subagent ran, and whether the work got done (R, needs the session's work card).</p>
+      </div>
+    </section>
+
+    <section aria-labelledby="h-plays">
+      <div class="section-head">
+        <h2 id="h-plays">Play-by-play</h2>
+        <p class="muted" id="plays-note">Every tool call in plain words, with how it ended.</p>
+        <div class="feed-tools">
+          <button class="chipbtn" type="button" id="only-errors" aria-pressed="false">Only errors</button>
+          <button class="chipbtn" type="button" id="clear-pick" hidden>Show every agent</button>
+        </div>
+      </div>
+      <ol class="plays" id="plays"></ol>
     </section>
 
     <div class="split">
@@ -230,18 +562,61 @@
         <ol class="thread" id="thread"></ol>
       </section>
     </div>
-
-    <details class="activity">
-      <summary>Raw activity <span class="muted" id="feed-count"></span></summary>
-      <ul id="feed"></ul>
-    </details>
   </main>
 </div>
+
+<template id="bot-template">
+  <svg class="bot" viewBox="0 0 120 120" aria-hidden="true">
+    <ellipse class="shadow" cx="60" cy="111" rx="26" ry="4.5"/>
+    <g class="orbit">
+      <g class="mini m1"><circle cx="112" cy="58" r="6.5"/><circle class="mini-eye" cx="112" cy="58" r="2.4"/></g>
+      <g class="mini m2"><circle cx="34" cy="103" r="6.5"/><circle class="mini-eye" cx="34" cy="103" r="2.4"/></g>
+      <g class="mini m3"><circle cx="34" cy="13" r="6.5"/><circle class="mini-eye" cx="34" cy="13" r="2.4"/></g>
+    </g>
+    <g class="body">
+      <g class="waves"><path d="M50 5q-5 7 0 13"/><path d="M70 5q5 7 0 13"/><path d="M44 1q-8 10 0 21"/><path d="M76 1q8 10 0 21"/></g>
+      <line class="stalk" x1="60" y1="27" x2="60" y2="15"/>
+      <circle class="bulb" cx="60" cy="11" r="5"/>
+      <rect class="ear" x="14" y="48" width="12" height="22" rx="5"/>
+      <rect class="ear" x="94" y="48" width="12" height="22" rx="5"/>
+      <rect class="head" x="22" y="26" width="76" height="66" rx="24"/>
+      <path class="gloss" d="M35 35q10-6 24-5"/>
+      <rect class="visor" x="31" y="40" width="58" height="32" rx="16"/>
+      <g class="eyes eyes-open"><rect x="42" y="48" width="10" height="16" rx="5"/><rect x="68" y="48" width="10" height="16" rx="5"/></g>
+      <g class="eyes eyes-happy"><path d="M41 61q6-10 12 0"/><path d="M67 61q6-10 12 0"/></g>
+      <g class="eyes eyes-shut"><path d="M41 56q6 5 12 0"/><path d="M67 56q6 5 12 0"/></g>
+      <g class="eyes eyes-x"><path d="M42 51l9 9m0-9l-9 9"/><path d="M68 51l9 9m0-9l-9 9"/></g>
+      <path class="mouth mouth-smile" d="M53 81q7 5 14 0"/>
+      <path class="mouth mouth-grin" d="M51 79q9 9 18 0z"/>
+      <path class="mouth mouth-wobble" d="M50 83q2.5-3 5 0t5 0t5 0t5 0"/>
+      <ellipse class="mouth mouth-o" cx="60" cy="82" rx="3" ry="2.6"/>
+      <g class="prop p-run"><rect x="80" y="77" width="34" height="22" rx="5"/><text x="85" y="92">&gt;</text><rect class="cursor" x="95" y="90" width="7" height="2.4"/></g>
+      <g class="prop p-edit">
+        <path class="scrawl" d="M74 108q4-6 8 0t8 0t8 0t8 0"/>
+        <g class="pencil"><g transform="rotate(32 104 74)">
+          <rect class="eraser" x="100.5" y="54" width="7" height="4.5" rx="1"/>
+          <rect class="wood" x="100.5" y="58" width="7" height="22"/>
+          <path class="tip" d="M100.5 80h7l-3.5 8z"/>
+          <path class="lead" d="M102.9 85.5h2.2l-1.1 2.5z"/>
+        </g></g>
+      </g>
+      <g class="prop p-read"><circle cx="100" cy="82" r="9"/><line x1="106.5" y1="88.5" x2="114" y2="96"/></g>
+      <g class="prop p-wait"><path class="arm" d="M96 72Q106 64 108 50"/><circle class="hand" cx="108" cy="45" r="6.5"/></g>
+      <path class="prop p-error" d="M101 20q-5 8 0 11q5-3 0-11z"/>
+      <g class="prop p-think"><circle cx="95" cy="22" r="2.6"/><circle cx="103" cy="15" r="3.4"/><circle cx="112" cy="7" r="4.2"/></g>
+      <g class="prop p-sleep"><text x="92" y="27">z</text><text class="z2" x="100" y="18">z</text><text class="z3" x="108" y="8">Z</text></g>
+    </g>
+  </svg>
+</template>
 
 <script>
   const STORAGE_KEY = "build101-key";
   const REPO_KEY = "build101-repo";
   const IDLE_SECONDS = 180;
+  const EVENTS_LIMIT = 300;
+  const HEART_MS = 20 * 60 * 1000;
+  const BINS = 40;
+  const BIN_MS = HEART_MS / BINS;
   const KIND_HINTS = {
     discovery: ["Something every agent in this repo should know", "Reaches the agents in this repo at their next step.", "Share"],
     question: ["What do you need to know from the team?", "Agents that know can answer it; answers show up here.", "Ask"],
@@ -250,9 +625,39 @@
   };
   const KIND_LABEL = { discovery: "discovery", question: "question", answer: "answer", note: "note", alert: "alert", overlap: "overlap", conflict: "overlap", hint: "pointed to who knows", nudge: "asked to share a fix" };
 
-  let apiKey = null, me = null, repo = null, feedAbort = null, refreshTimer = null;
+  // Every session gets a name people can say out loud: "Nimbus is waiting for you"
+  const NICKNAMES = ["Pixel", "Bolt", "Nimbus", "Tango", "Echo", "Rivet", "Comet", "Juno", "Sprocket", "Mochi", "Ziggy", "Orbit",
+    "Pico", "Nova", "Gizmo", "Waffle", "Biscuit", "Kiwi", "Fizz", "Noodle", "Pebble", "Sparky", "Widget", "Domino",
+    "Marble", "Cobalt", "Tofu", "Pretzel", "Jellybean", "Rocket", "Quokka", "Tinker", "Scooter", "Button", "Peanut", "Zephyr",
+    "Glimmer", "Bramble", "Nugget", "Pippin", "Socks", "Clementine", "Moss", "Puddle", "Rumble", "Hopper", "Bloop", "Mango"];
+  const MIX = { explore: "Read", build: "Write", run: "Run", talk: "Talk", delegate: "Delegate", plan: "Plan" };
+  const MIX_LINE = {
+    explore: "mostly reading and searching", build: "mostly writing code", run: "mostly running commands",
+    talk: "mostly talking to services", delegate: "mostly delegating", plan: "mostly planning",
+  };
+  const STATE_OF_KIND = { run: "run", build: "edit", explore: "read", talk: "talk", delegate: "delegate", plan: "plan", human: "think", wait: "wait", error: "error" };
+  const PILL = { run: "Running", edit: "Writing", read: "Reading", talk: "Talking", delegate: "Delegating", plan: "Planning", think: "Thinking", wait: "Your turn", error: "Hit a snag", sleep: "Asleep", start: "Waking up" };
+  const BUSY = new Set(["run", "edit", "read", "talk", "delegate", "plan", "think", "start", "error"]);
+  const ICONS = {
+    explore: '<svg viewBox="0 0 16 16"><circle cx="7" cy="7" r="4.5"/><path d="M10.5 10.5 14 14"/></svg>',
+    build: '<svg viewBox="0 0 16 16"><path d="M3 13l1-3.5 7-7 2.5 2.5-7 7z"/><path d="M9.5 4l2.5 2.5"/></svg>',
+    run: '<svg viewBox="0 0 16 16"><rect x="1.5" y="2.5" width="13" height="11" rx="2"/><path d="M4.5 6.5l2 1.5-2 1.5M8 10h3.5"/></svg>',
+    talk: '<svg viewBox="0 0 16 16"><path d="M2.5 3.5h11v7h-6l-3 2.5v-2.5h-2z"/></svg>',
+    delegate: '<svg viewBox="0 0 16 16"><circle cx="5" cy="5" r="2.3"/><circle cx="11.5" cy="10.5" r="2.3"/><path d="M6.6 6.6l3.3 2.3"/></svg>',
+    plan: '<svg viewBox="0 0 16 16"><path d="M3 4.5h1.5M3 8h1.5M3 11.5h1.5M7 4.5h6M7 8h6M7 11.5h6"/></svg>',
+    error: '<svg viewBox="0 0 16 16"><path d="M8 2l6.5 11.5h-13z"/><path d="M8 6.5v3M8 11.5v.5"/></svg>',
+    human: '<svg viewBox="0 0 16 16"><circle cx="8" cy="5.5" r="2.8"/><path d="M2.5 14c.8-3 3-4.5 5.5-4.5s4.7 1.5 5.5 4.5"/></svg>',
+    wait: '<svg viewBox="0 0 16 16"><path d="M3.5 14V2.5M3.5 3h8l-2 3 2 3h-8"/></svg>',
+  };
+  const reduceMotion = window.matchMedia("(prefers-reduced-motion: reduce)");
+
+  let apiKey = null, me = null, repo = null, feedAbort = null, refreshTimer = null, playsTimer = null;
+  let teamSessions = [], picked = null, onlyErrors = false, lastUnknownRefresh = 0;
   const people = new Map();
   const seenMessages = new Set();
+  const sessionMeta = new Map();
+  const timelines = new Map();
+  const cards = new Map();
 
   const $ = (id) => document.getElementById(id);
   function safe(fn, fallback = null) { try { return fn(); } catch { return fallback; } }
@@ -262,6 +667,11 @@
     if (className) node.className = className;
     return node;
   }
+  function hash(text) {
+    let h = 2166136261;
+    for (const ch of String(text)) { h ^= ch.charCodeAt(0); h = Math.imul(h, 16777619); }
+    return h >>> 0;
+  }
   function colorOf(user) {
     if (!people.has(user)) {
       let h = 0;
@@ -270,12 +680,43 @@
     }
     return people.get(user);
   }
+  // Same name for everyone looking; two loaded sessions that land on one name get a short tag from their id
+  function baseNick(sessionId) { return NICKNAMES[hash(sessionId) % NICKNAMES.length]; }
+  function nickOf(sessionId) {
+    const name = baseNick(sessionId);
+    for (const other of timelines.keys()) {
+      if (other !== sessionId && baseNick(other) === name) return `${name} ${sessionId.slice(0, 2).toUpperCase()}`;
+    }
+    return name;
+  }
   function ago(iso) {
     const s = Math.max(0, Math.round((Date.now() - new Date(iso)) / 1000));
     if (s < 45) return "just now";
     if (s < 3600) return `${Math.round(s / 60)} min ago`;
     if (s < 129600) return `${Math.round(s / 3600)} h ago`;
     return `${Math.round(s / 86400)} d ago`;
+  }
+  function dur(ms) {
+    const s = Math.max(0, Math.round(ms / 1000));
+    if (s < 60) return `${s}s`;
+    const m = Math.floor(s / 60);
+    if (m < 10) return `${m}m ${String(s % 60).padStart(2, "0")}s`;
+    if (m < 60) return `${m} min`;
+    return `${Math.floor(m / 60)}h ${String(m % 60).padStart(2, "0")}m`;
+  }
+  function took(ms) { return ms < 10000 ? `${(Math.max(ms, 0) / 1000).toFixed(1)}s` : dur(ms); }
+  function clip(text, n) {
+    const t = String(text || "").replace(/\s+/g, " ").trim();
+    return t.length > n ? `${t.slice(0, n - 1)}…` : t;
+  }
+  function lc(text) { return text ? text[0].toLowerCase() + text.slice(1) : ""; }
+  function basename(path) {
+    const s = String(path || "").replace(/["']/g, "").replace(/[\\/]+$/, "");
+    return s.slice(Math.max(s.lastIndexOf("/"), s.lastIndexOf("\\")) + 1) || s;
+  }
+  function listNames(names) {
+    if (names.length < 2) return names.join("");
+    return `${names.slice(0, -1).join(", ")} and ${names[names.length - 1]}`;
   }
   async function api(path, options = {}) {
     const res = await fetch(`/api${path}`, {
@@ -290,32 +731,1005 @@
     return res.json();
   }
 
-  // ---------- Roster and file map ----------
-  function renderRoster(sessions) {
-    const roster = $("roster");
-    if (!sessions.length) {
-      const empty = el("div", null, "empty");
-      empty.append(el("strong", "Nobody is working in this repo right now."),
-        document.createTextNode("Open Claude Code at the repo root with BUILD101_KEY set and the session appears here."));
-      roster.replaceChildren(empty);
-      $("roster-note").textContent = "";
-      return;
+  // ---------- Turning hook lines into plain words ----------
+  function hostOf(text) {
+    const m = String(text).match(/https?:\/\/([A-Za-z0-9.-]+)/);
+    return m ? m[1].toLowerCase() : null;
+  }
+  function isTeamHost(host) {
+    return Boolean(host) && (/\.sslip\.io$/.test(host) || (host === location.hostname && !/^(127\.|localhost)/.test(host)));
+  }
+
+  const TOOL_LINES = {
+    agent: ["delegate", "Briefing a helper agent"], task: ["delegate", "Briefing a helper agent"],
+    subagenthandback: ["delegate", "Handing results back"], sendmessage: ["talk", "Messaging another agent"],
+    todowrite: ["plan", "Updating its to-do list"], mcp__ccd_turn__update_plan: ["plan", "Updating its plan"],
+    mcp__ccd_turn__wrap_up: ["plan", "Wrapping up"], exitplanmode: ["plan", "Proposing a plan"], enterplanmode: ["plan", "Planning"],
+    askuserquestion: ["wait", "Asking a question"], toolsearch: ["explore", "Looking for the right tool"],
+    glob: ["explore", "Searching for files"], grep: ["explore", "Searching the code"], ls: ["explore", "Looking around the files"],
+    websearch: ["talk", "Searching the web"], webfetch: ["talk", "Reading a web page"], monitor: ["plan", "Setting up a watcher"],
+    taskstop: ["plan", "Stopping a background job"], killshell: ["plan", "Stopping a background job"],
+    taskoutput: ["explore", "Checking a background job"], bashoutput: ["explore", "Checking a background job"],
+    skill: ["plan", "Loading a skill"], powershell: ["run", "Running PowerShell"], artifact: ["build", "Publishing a page"],
+    mcp__build101__share_discovery: ["talk", "Sharing a discovery with the team"], mcp__build101__ask_team: ["talk", "Asking the team"],
+    mcp__build101__answer_team: ["talk", "Answering a teammate"], mcp__build101__team_status: ["talk", "Checking who else is working"],
+  };
+  const FAILED_NOUN = { bash: "A command", powershell: "A command", edit: "An edit", write: "A write", multiedit: "An edit", read: "A read", webfetch: "A fetch" };
+
+  function describeTool(name) {
+    const key = String(name || "").toLowerCase();
+    if (TOOL_LINES[key]) return { kind: TOOL_LINES[key][0], text: TOOL_LINES[key][1] };
+    const m = key.match(/^mcp__(.+?)__(.+)$/);
+    if (m && /browser|chrome/.test(m[1])) {
+      if (/screenshot|computer|read_page|get_page_text|find/.test(m[2])) return { kind: "explore", text: "Looking at a page in the browser" };
+      if (/navigate|preview_start|tabs_create/.test(m[2])) return { kind: "explore", text: "Opening a page in the browser" };
+      if (/javascript/.test(m[2])) return { kind: "run", text: "Running code in the browser" };
+      return { kind: "explore", text: "Using the browser" };
     }
-    const live = sessions.filter((s) => (Date.now() - new Date(s.last_event_at)) / 1000 <= IDLE_SECONDS).length;
-    $("roster-note").textContent = `${sessions.length} session${sessions.length > 1 ? "s" : ""}, ${live} active in the last 3 minutes`;
-    roster.replaceChildren(...sessions.map((s) => {
-      const card = el("article", null, "person");
-      card.style.setProperty("--who", colorOf(s.user_name));
-      if ((Date.now() - new Date(s.last_event_at)) / 1000 > IDLE_SECONDS) card.classList.add("idle");
-      const head = el("header");
-      head.append(el("strong", s.user_name));
-      if (s.you) head.append(el("span", "you", "tag"));
-      head.append(el("span", ago(s.last_event_at), "when muted"));
-      card.append(head, el("p", s.intent || "No task stated yet", "task"), el("div", s.last_summary, "last mono"));
-      return card;
+    if (m && /^ccd_/.test(m[1])) return { kind: "plan", text: `Telling the app: ${m[2].replace(/[_-]+/g, " ")}` };
+    if (m) {
+      const server = /^[0-9a-f-]{20,}$/.test(m[1]) ? "a connector" : m[1].replace(/[_-]+/g, " ");
+      return { kind: "talk", text: `Using ${server}: ${m[2].replace(/[_-]+/g, " ")}` };
+    }
+    return { kind: "run", text: key ? `Using ${key}` : "Working" };
+  }
+
+  function commandLine(verb, part, host) {
+    const run = (text) => ({ kind: "run", text });
+    const explore = (text) => ({ kind: "explore", text });
+    const args = part.split(/\s+/).slice(1);
+    const words = args.filter((a) => !a.startsWith("-"));
+    const sub = words.find((w) => /^[a-z][a-z-]*$/.test(w)) || "";
+    const script = (part.match(/(?:^|\s)["']?([\w./~:\\-]+\.(?:py|js|mjs|cjs|ts|sh|rb))["']?(?=\s|$)/) || [])[1];
+    const lang = /^python/.test(verb) ? "Python" : ["bash", "sh", "zsh"].includes(verb) ? "shell" : "JavaScript";
+
+    if (/^python[\d.]*$|^py$/.test(verb) || ["node", "deno", "bun", "tsx", "ruby", "bash", "sh", "zsh"].includes(verb)) {
+      if (/\s-m\s+pytest/.test(part)) return run("Running the tests");
+      const mod = (part.match(/\s-m\s+([\w.]+)/) || [])[1];
+      if (script) return run(`Running ${basename(script)}`);
+      if (mod) return run(`Running ${mod}`);
+      if (/\s-(\s|$)|<<|\s-c\s|\s-e\s/.test(part)) return run(`Running a ${lang} snippet`);
+      return run(`Running ${verb}`);
+    }
+    if (["pytest", "jest", "vitest", "mocha"].includes(verb)) return run("Running the tests");
+    if (["npm", "pnpm", "yarn"].includes(verb)) {
+      if (["test", "t"].includes(sub)) return run("Running the tests");
+      if (["install", "i", "add", "ci"].includes(sub)) return run("Installing packages");
+      if (sub === "run") return run(`Running the "${words[1] || "?"}" script`);
+      return run(`Running ${verb} ${sub}`.trim());
+    }
+    if (verb === "npx" || verb === "uvx") return ["ruff", "eslint", "prettier", "black", "mypy"].includes(words[0]) ? run("Checking the code style") : run(`Running ${words[0] || verb}`);
+    if (["uv", "pip", "pip3", "poetry"].includes(verb)) {
+      if (["install", "add", "sync"].includes(sub)) return run("Installing packages");
+      if (sub === "run") return describeCommand(part.replace(/^\S+\s+run\s+/, ""));
+      return run(`Running ${verb} ${sub}`.trim());
+    }
+    if (["ruff", "eslint", "flake8", "mypy", "black", "prettier", "biome", "tsc"].includes(verb)) return run("Checking the code style");
+    if (verb === "git") {
+      if (["status", "diff", "log", "show", "branch", "blame", "rev-parse", "ls-files", "remote", "shortlog"].includes(sub)) return explore(`Checking git ${sub}`);
+      if (sub === "commit") return { kind: "build", text: "Committing changes" };
+      if (sub === "add") return { kind: "build", text: "Staging files" };
+      if (sub === "push") return { kind: "talk", text: "Pushing to GitHub" };
+      if (["pull", "fetch", "clone"].includes(sub)) return { kind: "talk", text: "Pulling from GitHub" };
+      if (["checkout", "switch"].includes(sub)) return { kind: "build", text: "Switching branches" };
+      if (["merge", "rebase", "cherry-pick"].includes(sub)) return { kind: "build", text: "Merging branches" };
+      return { kind: "build", text: `Running git ${sub}`.trim() };
+    }
+    if (verb === "gh") {
+      const what = `${words[0] || ""} ${words[1] || ""}`.trim();
+      if (what === "pr create") return { kind: "talk", text: "Opening a pull request" };
+      if (what === "pr merge") return { kind: "talk", text: "Merging a pull request" };
+      if (words[0] === "pr") return { kind: "talk", text: "Checking pull requests" };
+      if (words[0] === "run") return { kind: "talk", text: "Checking CI" };
+      if (words[0] === "issue") return { kind: "talk", text: "Looking at issues" };
+      return { kind: "talk", text: "Using the GitHub CLI" };
+    }
+    if (["curl", "wget", "http", "https", "xh"].includes(verb)) {
+      if (isTeamHost(host)) return { kind: "talk", text: "Talking to the team server" };
+      return { kind: "talk", text: host ? `Calling ${host}` : "Making a web request" };
+    }
+    if (["grep", "rg", "ag", "ack", "egrep"].includes(verb)) {
+      const pattern = (words[0] || "").replace(/^["']|["']$/g, "");
+      const alts = pattern.split(/\\\||\|/).filter(Boolean);
+      if (!alts.length) return explore("Searching the code");
+      return explore(alts.length > 1 ? `Searching for "${clip(alts[0], 24)}" and ${alts.length - 1} more` : `Searching for "${clip(alts[0], 30)}"`);
+    }
+    if (["find", "fd", "ls", "tree", "du", "stat", "file"].includes(verb)) {
+      const dir = words.find((w) => !/^['"*]/.test(w));
+      return explore(dir && dir !== "." ? `Looking around ${basename(dir)}` : "Looking around the files");
+    }
+    if (["sed", "perl"].includes(verb) && /\s-i\b/.test(part)) return { kind: "build", text: "Editing a file in place" };
+    if (["cat", "head", "tail", "less", "more", "bat", "wc", "jq", "awk", "sed", "diff", "nl", "sort", "uniq", "cut", "xxd", "column"].includes(verb)) {
+      const file = words.filter((w) => /[./]/.test(w) && !/^['"$({]/.test(w) && !/^\d/.test(w)).pop();
+      return explore(file ? `Reading ${basename(file)}` : "Reading some output");
+    }
+    if (["mkdir", "cp", "mv", "touch", "chmod", "ln", "rsync", "tar", "unzip", "zip"].includes(verb)) return { kind: "build", text: "Moving files around" };
+    if (verb === "rm") return { kind: "build", text: "Cleaning up files" };
+    if (["docker", "docker-compose", "podman", "kubectl", "helm"].includes(verb)) return run(`Running ${verb} ${words.slice(0, 2).join(" ")}`.trim());
+    if (["ssh", "scp", "aws", "gcloud", "az", "terraform", "flyctl", "vercel"].includes(verb)) return { kind: "talk", text: verb === "ssh" ? "Connecting to a server" : `Using ${verb}` };
+    if (["make", "just", "task"].includes(verb)) return run(`Running ${verb} ${sub}`.trim());
+    if (["cargo", "go", "mvn", "gradle", "swift", "xcodebuild", "dotnet"].includes(verb)) return run(sub === "test" ? "Running the tests" : `Building with ${verb}`);
+    if (verb === "sleep") return { kind: "plan", text: "Waiting a moment" };
+    if (verb === "open") return { kind: "plan", text: "Opening something on screen" };
+    if (verb === "claude") return { kind: "delegate", text: "Starting another Claude" };
+    if (["echo", "printf"].includes(verb)) return { kind: "plan", text: "Printing a note" };
+    return run(`Running ${verb}`);
+  }
+
+  // Skip "cd somewhere &&", variable setup and wrappers; describe the first command that does something
+  const SETUP_VERBS = new Set(["cd", "export", "set", "source", ".", "pushd", "popd", "true", "unset", "local", "trap", "if", "then", "else", "fi", "for", "while", "do", "done", "EOF", "}", "{"]);
+  function firstCommand(cmd) {
+    for (const piece of String(cmd).split(/\s*(?:&&|\|\||;|\n)\s*/)) {
+      let part = piece.trim().replace(/^[({\s]+/, "");
+      part = part.replace(/^(?:[A-Za-z_][A-Za-z0-9_]*=(?:"[^"]*"|'[^']*'|\S*)\s*)+/, "");
+      part = part.replace(/^(?:(?:time|sudo|exec|env|nohup|command)\s+)+/, "");
+      if (!part) continue;
+      const verb = basename(part.split(/\s+/)[0]);
+      if (SETUP_VERBS.has(verb)) continue;
+      return { part, verb };
+    }
+    return null;
+  }
+  function describeCommand(cmd) {
+    const host = hostOf(cmd);
+    const first = firstCommand(cmd);
+    if (!first) return { kind: "run", text: "Running a shell command" };
+    const pipe = first.part.split(/\s*\|\s*/);
+    if (pipe.length > 1 && ["echo", "printf", "cat"].includes(first.verb)) return commandLine(basename(pipe[1].split(/\s+/)[0]), pipe[1], host);
+    return commandLine(first.verb, first.part, host);
+  }
+
+  // Prompts carry harness wrappers (<task-notification>, <ide_opened_file>…); keep what a person said
+  function cleanPrompt(raw) {
+    if (!raw) return null;
+    let t = String(raw).trim();
+    let m = t.match(/^<task-notification>[\s\S]*?<summary>([\s\S]*?)(?:<\/summary>|$)/);
+    if (m) return { system: true, text: clip(m[1].replace(/^Monitor event:\s*/i, "").replace(/^"|"$/g, ""), 90) };
+    if (/^<task-notification>/.test(t)) return { system: true, text: "a background job" };
+    if (/^(<agent-message[^>]*>\s*)?\[Subagent hand-back\]/i.test(t)) return { system: true, text: "a helper's report" };
+    if (/^<agent-message/.test(t)) return { system: true, text: "another agent" };
+    m = t.match(/<command-name>\/?([^<]+)<\/command-name>/);
+    if (m) return { system: false, text: `/${m[1].trim()}` };
+    t = t.replace(/<(ide_opened_file|ide_selection|system-reminder|local-command-stdout|command-message|command-args)>[\s\S]*?(<\/\1>|$)/g, " ");
+    t = t.replace(/<pasted_content[^>]*>[\s\S]*?(<\/pasted_content>|$)/g, " (pasted context) ");
+    t = t.replace(/<\/?[a-z_-]+[^>]*>/gi, " ").replace(/\s+/g, " ").trim();
+    if (!t) return { system: true, text: "the IDE" };
+    return { system: false, text: t };
+  }
+
+  function describeRaw(ev) {
+    const s = ev.summary || "";
+    const p = ev.payload || {};
+    switch (ev.type) {
+      case "intent": {
+        const c = cleanPrompt(p.prompt || s);
+        if (!c || c.system) return { kind: "plan", text: `Pinged by ${c ? c.text : "a background job"}`, system: true };
+        return { kind: "human", text: c.text };
+      }
+      case "stop": return { kind: "wait", text: "Finished its turn" };
+      case "session_start": return { kind: "plan", text: p.source === "resume" ? "Picked the session back up" : p.source === "compact" ? "Came back from compacting" : "Joined the room" };
+      case "session_end": return { kind: "plan", text: "Left the room" };
+      case "compact": return { kind: "plan", text: "Compacting its memory" };
+      case "subagent_start": return { kind: "delegate", text: `A ${(s.match(/^subagent\((.*)\)$/) || [])[1] || "helper"} helper joined` };
+      case "subagent_stop": return { kind: "delegate", text: "A helper finished" };
+    }
+    let m = s.match(/^error\(([^:)]+):\s*([\s\S]*?)\)?$/);
+    if (m) {
+      const detail = m[2].replace(/^Exit code (\d+)$/i, "exit $1");
+      return { kind: "error", text: `${FAILED_NOUN[m[1].toLowerCase()] || m[1]} failed`, detail: clip(detail, 90) };
+    }
+    if ((m = s.match(/^edit\(([\s\S]*?)\)?$/))) return { kind: "build", text: `Editing ${basename(m[1])}`, file: m[1] };
+    if ((m = s.match(/^read\(([\s\S]*?)\)?$/))) return { kind: "explore", text: `Reading ${basename(m[1])}`, file: m[1] };
+    if ((m = s.match(/^fetch\(([\s\S]*?)\)?$/))) return { kind: "talk", text: `Reading ${m[1]}` };
+    if ((m = s.match(/^bash\(([\s\S]*?)\)?$/))) return describeCommand(p.command || m[1]);
+    return describeTool(p.tool || s);
+  }
+  function describe(ev) {
+    if (!ev.d) ev.d = describeRaw(ev);
+    return ev.d;
+  }
+
+  // ---------- DIK numbers from hook events (docs/DIK-INSIGHTS.md) ----------
+  // Each action is capital (a reusable asset that already carries the knowledge: skill, domain MCP, repo
+  // script), ad hoc (a generic tool Claude fills in on the spot: SQL by hand, ssh, a Python heredoc, the
+  // browser) or base (read, edit, search). K = capital / (capital + ad hoc).
+  const CORRECTION_RE = /^\s*(no[,.! ]|no$|nop|eso no|pero |pará|para,|espera|esperá|mal\b|está mal|esta mal|no es|no era|te equivocaste|otra vez|de nuevo|sigue sin|sigue igual|no funciona|no anda|no hace falta|no hagas|no toques|dejá|deja eso|revert|volvé|volve atras)/i;
+  // Checked on the command line itself, never on a heredoc body, which is often just data
+  const RISKY_RE = /\bssh\b.*\b(psql|docker exec)\b|\bgit push\b.*(\s-f\b|--force)|\brm\s+-rf?\s+(\/|~\/?|\$HOME\/?)(\*|\s|$)|\b(DROP|TRUNCATE)\s+TABLE\b|\bDELETE\s+FROM\b/i;
+  const SCRATCH_RE = /scratchpad|\/tmp\/|[\\/]Temp[\\/]/i;
+  const WAIT_CAP_MS = 60 * 60 * 1000;
+  const TOKEN_LABEL = {
+    "python:sql": "Python one-offs that query a database", "python:data": "Python one-offs that crunch data files",
+    "python:http": "Python one-offs that call an API", "python:edit": "Python one-offs that rewrite files",
+    "python:other": "Python one-off scripts", "python:scratch": "Throwaway scripts in a scratch folder",
+    browser: "Driving the browser", agent: "General-purpose helper agents", websearch: "Web searches", webfetch: "Reading web pages",
+  };
+
+  function pythonPurpose(cmd) {
+    if (/psycopg|sqlite3|sqlalchemy|\bselect\b[\s\S]+\bfrom\b/i.test(cmd)) return "sql";
+    if (/pandas|openpyxl|csv|parquet|pyarrow|json\.load/.test(cmd)) return "data";
+    if (/requests|urllib|httpx/.test(cmd)) return "http";
+    if (/re\.sub|\.replace\(|open\([^)]*['"]w|write_text/.test(cmd)) return "edit";
+    return "other";
+  }
+  function tokenLabel(tok) {
+    if (TOKEN_LABEL[tok]) return TOKEN_LABEL[tok];
+    if (tok.startsWith("ssh:")) return `ssh into ${tok.slice(4)}`;
+    if (tok.startsWith("curl:")) return isTeamHost(tok.slice(5)) ? "curl calls to the team server" : `curl calls to ${tok.slice(5)}`;
+    if (tok.startsWith("mcp:")) return `Raw queries through ${tok.slice(4).split(".")[0]}`;
+    return `${tok} commands`;
+  }
+  function actionOf(ev) {
+    if (ev.t) return ev.t;
+    const p = ev.payload || {};
+    const tool = p.tool || "";
+    let tok = tool.toLowerCase() || "?", tier = "base";
+    if (tool === "Skill") { tok = "skill"; tier = "capital"; }
+    else if (tool === "Agent" || tool === "Task") { tok = "agent"; tier = "adhoc"; }
+    else if (tool.startsWith("mcp__")) {
+      tok = tool.replace(/^mcp__/, "mcp:").replace("__", ".");
+      if (/^mcp__(ccd_|visualize|terminal)/.test(tool)) tier = "base";
+      else if (/browser|chrome/i.test(tool)) { tok = "browser"; tier = "adhoc"; }
+      else tier = /__(query|describe|list_tables)$/.test(tool) ? "adhoc" : "capital";
+    } else if (tool === "Bash" || tool === "PowerShell") {
+      const cmd = p.command || "";
+      const first = firstCommand(cmd);
+      const part = first ? first.part : "", verb = first ? first.verb : "shell";
+      const script = (part.match(/^(?:python[\d.]*|node|bash|sh|tsx|deno|bun)\s+["']?([^\s"']+\.(?:py|sh|js|ts|mjs))/) || [])[1];
+      if (/^python[\d.]*$/.test(verb) && /\s-(\s|$)|<<|\s-c\s/.test(part)) { tok = `python:${pythonPurpose(cmd)}`; tier = "adhoc"; }
+      else if (script && SCRATCH_RE.test(script)) { tok = "python:scratch"; tier = "adhoc"; }
+      else if (script || /^(npm run|npm test|pnpm |make\b|pytest|python[\d.]* -m |uv run|just )/.test(part)) { tok = `script:${script ? basename(script) : verb}`; tier = "capital"; }
+      else if (["ssh", "scp", "docker", "curl", "wget", "psql", "kubectl", "mysql"].includes(verb)) {
+        tok = verb === "ssh" ? `ssh:${(part.match(/\s([\w.-]*@?[\w-]+\.[\w.-]+|[\w-]+@[\w.-]+)/) || [])[1] || "a server"}`
+          : verb === "curl" || verb === "wget" ? `curl:${hostOf(cmd) || "?"}` : verb;
+        tier = "adhoc";
+      } else tok = verb;
+    } else if (tool === "WebSearch" || tool === "WebFetch") { tier = "adhoc"; }
+    return (ev.t = { tok, tier });
+  }
+
+  // Facts for one session, from `from` on: the hook-side version of tools/session_facts.py
+  function factsOf(list, from = 0) {
+    const f = { acts: 0, helperActs: 0, activeMs: 0, human: 0, corrections: 0, errors: 0, capital: 0, adhoc: 0, base: 0,
+      waits: [], subagents: 0, tokens: new Map(), fails: new Map(), risky: [] };
+    const lastAction = new Map();
+    let prevAt = null, lastStop = null;
+    for (const e of list) {
+      if (e.at < from) continue;
+      if (prevAt !== null && e.at - prevAt <= 300000) f.activeMs += e.at - prevAt;
+      prevAt = e.at;
+      const d = describe(e);
+      const helper = (e.payload && e.payload.agent_id) || "";
+      if (e.type === "pre_action") {
+        f.acts++;
+        if (helper) f.helperActs++;
+        const a = actionOf(e);
+        f[a.tier]++;
+        if (a.tier === "adhoc") f.tokens.set(a.tok, (f.tokens.get(a.tok) || 0) + 1);
+        if (RISKY_RE.test(((e.payload && e.payload.command) || "").split("\n")[0])) f.risky.push(e);
+        lastAction.set(helper, e);
+      } else if (d.kind === "error") {
+        f.errors++;
+        const before = lastAction.get(helper);
+        if (before) {
+          const prev = f.fails.get(before.summary);
+          f.fails.set(before.summary, { ev: before, n: (prev ? prev.n : 0) + 1, detail: d.detail });
+        }
+      } else if (e.type === "intent" && d.kind === "human") {
+        f.human++;
+        if (CORRECTION_RE.test((e.payload && e.payload.prompt) || e.summary || "")) f.corrections++;
+        if (lastStop !== null) { f.waits.push(Math.min(e.at - lastStop, WAIT_CAP_MS)); lastStop = null; }
+      } else if (e.type === "stop") {
+        lastStop = e.at;
+      } else if (e.type === "subagent_start") {
+        f.subagents++;
+      }
+    }
+    // A turn that is still waiting counts up to now, capped like the closed ones
+    if (lastStop !== null) f.waits.push(Math.min(Date.now() - lastStop, WAIT_CAP_MS));
+    return f;
+  }
+  // L needs a prompt and K a handful of non-trivial actions; below that they read as noise, so they show "–"
+  function numbers(f) {
+    const waited = f.waits.reduce((x, y) => x + y, 0);
+    return {
+      L: f.human && f.acts ? f.acts / f.human : null,
+      K: f.capital + f.adhoc >= 5 ? f.capital / (f.capital + f.adhoc) : null,
+      F: (100 * (f.errors + 3 * f.corrections)) / Math.max(10, f.acts),
+      E: f.errors / Math.max(1, f.acts),
+      waited,
+    };
+  }
+  function sumFacts(list) {
+    const t = { acts: 0, helperActs: 0, activeMs: 0, human: 0, corrections: 0, errors: 0, capital: 0, adhoc: 0, base: 0, waits: [], subagents: 0 };
+    for (const f of list) {
+      for (const k of ["acts", "helperActs", "activeMs", "human", "corrections", "errors", "capital", "adhoc", "base", "subagents"]) t[k] += f[k];
+      t.waits.push(...f.waits);
+    }
+    return t;
+  }
+  function median(xs) {
+    if (!xs.length) return 0;
+    const s = [...xs].sort((a, b) => a - b);
+    return s[Math.floor(s.length / 2)];
+  }
+  const fmtL = (x) => (x === null ? "–" : x >= 10 ? Math.round(x) : Math.round(x * 10) / 10);
+  const fmtK = (x) => (x === null ? "–" : `${Math.round(x * 100)}%`);
+  const fmtF = (x) => (Math.round(x * 10) / 10).toFixed(1);
+  function fmtMin(ms) {
+    if (ms < 60000) return `${Math.round(ms / 1000)}s`;
+    const m = Math.round(ms / 60000);
+    return m < 60 ? `${m}m` : `${Math.floor(m / 60)}h ${String(m % 60).padStart(2, "0")}m`;
+  }
+
+  // ---------- Per-session timelines ----------
+  function timeline(id) {
+    if (!timelines.has(id)) timelines.set(id, { byId: new Map(), list: [], fetchedAt: 0 });
+    return timelines.get(id);
+  }
+  function addEvents(id, events) {
+    const t = timeline(id);
+    let changed = false;
+    for (const ev of events) {
+      const key = String(ev.id);
+      const prev = t.byId.get(key);
+      if (prev && (prev.payload || !ev.payload)) continue;
+      t.byId.set(key, { id: ev.id, type: ev.type, summary: ev.summary, payload: ev.payload || null, at: new Date(ev.ts).getTime() });
+      changed = true;
+    }
+    if (changed) {
+      t.list = [...t.byId.values()].sort((a, b) => a.at - b.at || Number(a.id) - Number(b.id));
+      for (const old of t.list.splice(0, Math.max(0, t.list.length - EVENTS_LIMIT * 2))) t.byId.delete(String(old.id));
+    }
+    return changed;
+  }
+
+  // The last thing a person asked for; failing that, the harness message the agent is reacting to
+  function missionOf(session, list) {
+    let fallback = null;
+    for (let i = list.length - 1; i >= 0; i--) {
+      const e = list[i];
+      if (e.type !== "intent") continue;
+      const c = cleanPrompt((e.payload && e.payload.prompt) || e.summary);
+      if (c && !c.system) return c.text;
+      if (c && !fallback) fallback = `Following up on ${c.text}`;
+    }
+    const c = cleanPrompt(session.intent);
+    if (c && !c.system) return c.text;
+    return fallback || (c ? `Following up on ${c.text}` : null);
+  }
+  function hasHumanPrompt(list) {
+    return list.some((e) => e.type === "intent" && describe(e).kind === "human");
+  }
+
+  function analyze(s) {
+    const now = Date.now();
+    const list = timeline(s.session_id).list;
+    const lastSeen = new Date(s.last_event_at).getTime();
+    const events = list.length ? list : [{ id: "seed", type: "post_action", summary: s.last_summary || "", payload: null, at: lastSeen }];
+    const isHelper = (e) => Boolean(e.payload && e.payload.agent_id);
+    const mainEvents = events.filter((e) => !isHelper(e));
+    const last = mainEvents.length ? mainEvents[mainEvents.length - 1] : events[events.length - 1];
+    const newest = Math.max(events[events.length - 1].at, lastSeen);
+    const quiet = (now - newest) / 1000;
+    const d = describe(last);
+    const helpers = new Set();
+    for (const e of events) if (isHelper(e) && now - e.at < 90000) helpers.add(e.payload.agent_id);
+
+    let state;
+    if (last.type === "stop") state = "wait";
+    else if (last.type === "pre_action" && d.kind === "wait") state = "wait";
+    else if (d.kind === "error" && quiet < 90) state = "error";
+    else if (quiet > IDLE_SECONDS) state = "sleep";
+    else if (last.type === "pre_action") state = STATE_OF_KIND[d.kind] || "run";
+    else if (last.type === "session_start") state = "start";
+    else if (last.type === "subagent_start") state = "delegate";
+    else state = "think";
+
+    const mix = { explore: 0, build: 0, run: 0, talk: 0, delegate: 0, plan: 0 };
+    const bins = Array.from({ length: BINS }, () => ({ total: 0, kinds: {}, error: false, human: false, stop: false }));
+    const from = now - HEART_MS;
+    let actions = 0, errors = 0, errors10 = 0, recent = 0, prompts = 0;
+    for (const e of events) {
+      const k = describe(e).kind;
+      const index = Math.floor((e.at - from) / BIN_MS);
+      const bin = index >= 0 && index < BINS ? bins[index] : null;
+      if (e.type === "pre_action") {
+        actions++;
+        if (k in mix) mix[k]++;
+        if (now - e.at < 300000) recent++;
+        if (bin) { bin.total++; bin.kinds[k] = (bin.kinds[k] || 0) + 1; }
+      } else if (k === "error") {
+        errors++;
+        if (now - e.at < 600000) errors10++;
+        if (bin) bin.error = true;
+      } else if (e.type === "intent" && k === "human") {
+        prompts++;
+        if (bin) bin.human = true;
+      } else if (e.type === "stop" && bin) {
+        bin.stop = true;
+      }
+    }
+    for (const b of bins) b.kind = Object.entries(b.kinds).sort((x, y) => y[1] - x[1])[0]?.[0] || "plan";
+
+    let failed = null;
+    if (d.kind === "error") {
+      for (let i = mainEvents.length - 2; i >= 0; i--) {
+        if (mainEvents[i].type === "pre_action") { failed = describe(mainEvents[i]); break; }
+      }
+    }
+    const mine = Boolean(me && s.user_name === me.user);
+    const since = now - last.at;
+    let say, sub = "";
+    switch (state) {
+      case "wait":
+        if (last.type === "pre_action") say = mine ? "I have a question for you." : `I have a question for ${s.user_name}.`;
+        else say = mine ? "All done. Your move." : `All done. Over to ${s.user_name}.`;
+        sub = `waiting ${dur(since)}${helpers.size ? ` · ${helpers.size} helper${helpers.size > 1 ? "s" : ""} still busy` : ""}`;
+        break;
+      case "error":
+        say = failed ? `Ouch. ${failed.text} failed.` : `Ouch. ${d.text}.`;
+        sub = d.detail ? `${d.detail} · ${dur(since)} ago` : `${dur(since)} ago`;
+        break;
+      case "sleep":
+        say = "Zzz…";
+        sub = `quiet for ${dur(now - newest)} · last: ${lc(d.text)}`;
+        break;
+      case "start":
+        say = "Booting up…";
+        break;
+      case "think":
+        if (last.type === "intent" && d.kind === "human") say = mine ? "Reading your message…" : `Reading ${s.user_name}'s message…`;
+        else if (last.type === "intent") { say = "Checking on a background job…"; sub = d.text.replace(/^Pinged by /, ""); }
+        else { say = "Thinking…"; sub = `just did: ${lc(d.text)}${d.kind === "error" ? ` (${d.detail || "failed"})` : ""}`; }
+        break;
+      default:
+        say = d.text;
+        sub = dur(since);
+    }
+    const started = sessionMeta.get(s.session_id)?.started_at;
+    const facts = factsOf(list);
+    return {
+      s, state, mine, say, sub, helpers: helpers.size, mission: missionOf(s, list), mix, bins, actions, errors, errors10, recent, prompts,
+      facts, nums: numbers(facts),
+      newest, started: started ? new Date(started).getTime() : events[0].at, total: sessionMeta.get(s.session_id)?.event_count,
+      nick: nickOf(s.session_id),
+    };
+  }
+
+  // ---------- Stage ----------
+  function heartSvg(a) {
+    const w = 400, h = 44, bw = w / BINS;
+    const max = Math.max(6, ...a.bins.map((b) => b.total));
+    let svg = `<svg viewBox="0 0 ${w} ${h}" aria-hidden="true"><line class="base" x1="0" y1="${h - 9}" x2="${w}" y2="${h - 9}"/>`;
+    a.bins.forEach((b, i) => {
+      const x = i * bw + 1, cx = x + (bw - 2) / 2;
+      if (b.total) {
+        const bh = Math.max(3, Math.round((b.total / max) * (h - 18)));
+        svg += `<rect class="k-${b.kind}" x="${x}" y="${h - 9 - bh}" width="${bw - 2}" height="${bh}" rx="1.5"/>`;
+      }
+      if (b.error) svg += `<circle class="k-error" cx="${cx}" cy="4" r="3.2"/>`;
+      if (b.human) svg += `<path class="k-human" d="M${cx} ${h - 7}l3.6 6h-7.2z"/>`;
+      if (b.stop) svg += `<rect class="k-wait" x="${cx - 3}" y="${h - 6}" width="6" height="5" rx="1"/>`;
+    });
+    return `${svg}<rect class="now" x="${w - 2}" y="${h - 13}" width="2" height="8"/></svg>`;
+  }
+
+  function makeCard(s) {
+    const root = el("article", null, "agent enter");
+    root.dataset.id = s.session_id;
+    root.style.setProperty("--who", colorOf(s.user_name));
+    const wrap = el("div", null, "bot-wrap");
+    const bot = $("bot-template").content.firstElementChild.cloneNode(true);
+    bot.style.setProperty("--blink", `${-(hash(s.session_id) % 50) / 10}s`);
+    wrap.append(bot);
+
+    const main = el("div", null, "agent-main");
+    const head = el("header", null, "agent-head");
+    const nick = el("button", null, "nick");
+    nick.type = "button";
+    nick.title = "Show only this agent in the play-by-play";
+    nick.addEventListener("click", () => pick(picked === s.session_id ? null : s.session_id));
+    const owner = el("span", null, "owner");
+    const mineTag = el("span", "yours", "tag");
+    const pill = el("span", null, "pill");
+    const pillText = el("span");
+    pill.append(el("i"), pillText);
+    head.append(nick, owner, mineTag, pill);
+    const bubble = el("div", null, "bubble");
+    const say = el("p", null, "say");
+    const sub = el("p", null, "sub mono");
+    bubble.append(say, sub);
+    const mission = el("p", null, "mission");
+    const missionText = el("span");
+    mission.append(el("span", "Task", "label"), missionText);
+    main.append(head, bubble, mission);
+
+    const foot = el("div", null, "agent-foot");
+    const heart = el("div", null, "heart");
+    heart.setAttribute("role", "img");
+    const axis = el("div", null, "axis");
+    axis.append(el("span", "20 min ago"), el("span", "now"));
+    const mix = el("div", null, "mix");
+    const mixbar = el("div", null, "mixbar");
+    const mixline = el("span", null, "mixline");
+    mix.append(mixbar, mixline);
+    const stats = el("dl", null, "metrics");
+    const heartBox = el("div");
+    heartBox.append(heart, axis);
+    foot.append(heartBox, mix, stats);
+
+    root.append(wrap, main, foot);
+    // A timer, not animationend: a waiting card's ring animation replaces the pop, so that event never comes
+    setTimeout(() => root.classList.remove("enter"), 700);
+    const card = { root, wrap, bot, nick, owner, mineTag, pillText, say, sub, missionText, mission, heart, mixbar, mixline, stats, state: null, sayText: null };
+    cards.set(s.session_id, card);
+    return card;
+  }
+
+  function updateCard(card, a) {
+    const { root } = card;
+    const changed = card.state !== a.state;
+    root.className = `agent st-${a.state}${a.mine ? " mine" : ""}${picked === a.s.session_id ? " selected" : ""}${root.classList.contains("enter") ? " enter" : ""}${root.classList.contains("jolt") ? " jolt" : ""}`;
+    if (changed && a.state === "error" && card.state) jolt(card);
+    card.state = a.state;
+    card.bot.classList.remove("h1", "h2", "h3");
+    if (a.helpers) card.bot.classList.add(`h${Math.min(3, a.helpers)}`);
+
+    card.nick.textContent = a.nick;
+    card.owner.replaceChildren(document.createTextNode("of "), el("b", a.s.user_name));
+    card.mineTag.hidden = !a.mine;
+    card.pillText.textContent = a.state === "wait" && !a.mine ? `Waiting on ${a.s.user_name}` : PILL[a.state];
+    if (card.sayText !== a.say) {
+      card.sayText = a.say;
+      card.say.textContent = a.say;
+      card.say.classList.remove("typing");
+      void card.say.offsetWidth;
+      card.say.classList.add("typing");
+    }
+    card.sub.textContent = a.sub;
+    card.missionText.textContent = a.mission || "No task stated yet";
+    card.mission.title = a.mission || "";
+
+    card.heart.innerHTML = heartSvg(a);
+    card.heart.setAttribute("aria-label", `Last 20 minutes: ${a.bins.reduce((n, b) => n + b.total, 0)} actions, ${a.bins.filter((b) => b.error).length} stretches with errors`);
+
+    const total = Object.values(a.mix).reduce((x, y) => x + y, 0);
+    const segs = Object.entries(a.mix).filter(([, n]) => n > 0);
+    if (card.mixbar.childElementCount !== segs.length || card.mixbar.dataset.sig !== segs.map(([k]) => k).join()) {
+      card.mixbar.replaceChildren(...segs.map(([k]) => el("i", null, `k-${k}`)));
+      card.mixbar.dataset.sig = segs.map(([k]) => k).join();
+    }
+    segs.forEach(([k, n], i) => {
+      const seg = card.mixbar.children[i];
+      seg.style.flexGrow = n;
+      seg.title = `${MIX[k]}: ${Math.round((n / total) * 100)}%`;
+    });
+    const top = segs.sort((x, y) => y[1] - x[1])[0];
+    card.mixline.textContent = top ? `${MIX_LINE[top[0]]} (${Math.round((top[1] / total) * 100)}%)` : "nothing yet";
+
+    const f = a.facts, n = a.nums;
+    const who = a.mine ? "you" : a.s.user_name;
+    card.stats.replaceChildren(...[
+      ["Active", fmtMin(f.activeMs), `Time with events less than 5 minutes apart. Started ${dur(Date.now() - a.started)} ago.`],
+      ["Per prompt", fmtL(n.L), `L, leverage: ${f.acts} actions (${f.helperActs} by helpers) for ${f.human} prompt${f.human === 1 ? "" : "s"} from ${who}.`],
+      ["Reusable", fmtK(n.K), `K, capitalization: ${f.capital} actions through reusable assets (skills, repo scripts, domain MCPs) against ${f.adhoc} ad hoc ones (Python one-offs, ssh, curl, browser, raw SQL).`],
+      ["Friction", fmtF(n.F), `F, cost every 100 actions: ${f.errors} error${f.errors === 1 ? "" : "s"} + 3 × ${f.corrections} correction${f.corrections === 1 ? "" : "s"} in the prompts.`, n.F >= 8],
+      [`Waited on ${who}`, fmtMin(n.waited), `Time the agent sat finished, waiting for ${who}, over ${f.waits.length} turn${f.waits.length === 1 ? "" : "s"} (each counted up to an hour).`],
+    ].map(([label, value, tip, hot]) => {
+      const cell = el("div", null, hot ? "hot" : "");
+      cell.title = tip;
+      cell.append(el("dt", label), el("dd", String(value)));
+      return cell;
     }));
   }
 
+  function jolt(card) {
+    card.root.classList.add("jolt");
+    setTimeout(() => card.root.classList.remove("jolt"), 1000);
+  }
+  function spark(card, kind) {
+    if (reduceMotion.matches) return;
+    const dot = el("i", null, `spark k-${kind}`);
+    dot.style.setProperty("--dx", `${Math.round(Math.random() * 40 - 20)}px`);
+    dot.addEventListener("animationend", () => dot.remove());
+    card.wrap.append(dot);
+  }
+
+  // What needs the viewer, then what is moving, then agents waiting on someone else, then the sleepers
+  const ORDER = { wait: 3, error: 1, run: 2, edit: 2, read: 2, talk: 2, delegate: 2, plan: 2, think: 2, start: 2, sleep: 4 };
+  // Grouped by what they need from people; inside a group the order holds still so cards don't shuffle on every event
+  function analyses() {
+    const rank = (a) => (a.mine && a.state === "wait" ? 0 : ORDER[a.state]);
+    return teamSessions.map(analyze).sort((x, y) => rank(x) - rank(y) || x.started - y.started || x.s.session_id.localeCompare(y.s.session_id));
+  }
+
+  function renderStage() {
+    const stage = $("stage");
+    const list = analyses();
+    if (!list.length) {
+      cards.clear();
+      const empty = el("div", null, "stage-empty");
+      const bot = $("bot-template").content.firstElementChild.cloneNode(true);
+      const wrap = el("div", null, "agent st-sleep");
+      wrap.style.cssText = "border:0;padding:0;background:none;display:block;opacity:1";
+      wrap.append(bot);
+      const text = el("div");
+      text.append(el("strong", "Nobody is working in this repo right now."),
+        document.createTextNode("Open Claude Code at the repo root with BUILD101_KEY set and a bot shows up here."));
+      empty.append(wrap, text);
+      stage.replaceChildren(empty);
+      renderPulse(list);
+      return;
+    }
+    if (stage.querySelector(".stage-empty")) stage.replaceChildren();
+    const live = new Set(list.map((a) => a.s.session_id));
+    for (const [id, card] of cards) if (!live.has(id)) { card.root.remove(); cards.delete(id); }
+    const order = list.map((a) => {
+      const card = cards.get(a.s.session_id) || makeCard(a.s);
+      updateCard(card, a);
+      return card.root;
+    });
+    placeInOrder(stage, order);
+    renderPulse(list);
+  }
+
+  // Reorder with a short slide so a bot that needs you moves up visibly instead of jumping
+  function placeInOrder(stage, order) {
+    const current = [...stage.children];
+    if (order.length === current.length && order.every((node, i) => node === current[i])) return;
+    const before = new Map(current.map((node) => [node, node.getBoundingClientRect()]));
+    order.forEach((node) => stage.append(node));
+    if (reduceMotion.matches) return;
+    for (const node of order) {
+      const was = before.get(node);
+      if (!was) continue;
+      const now = node.getBoundingClientRect();
+      const dx = was.left - now.left, dy = was.top - now.top;
+      if (dx || dy) node.animate([{ transform: `translate(${dx}px, ${dy}px)` }, { transform: "none" }], { duration: 480, easing: "cubic-bezier(.2,.8,.2,1)" });
+    }
+  }
+
+  function setTile(id, value) {
+    const node = $(id);
+    const text = String(value);
+    if (node.textContent === text) return;
+    node.textContent = text;
+    node.classList.remove("bump");
+    void node.offsetWidth;
+    node.classList.add("bump");
+  }
+
+  function renderPulse(list) {
+    const waitingMine = list.filter((a) => a.state === "wait" && a.mine);
+    const waitingOthers = list.filter((a) => a.state === "wait" && !a.mine);
+    const busy = list.filter((a) => BUSY.has(a.state));
+    const snagged = list.filter((a) => a.state === "error" && a.errors10 < 3);
+    const struggling = list.filter((a) => a.errors10 >= 3);
+    const errors10 = list.reduce((n, a) => n + a.errors10, 0);
+    const perMinute = list.reduce((n, a) => n + a.recent, 0) / 5;
+    setTile("t-live", list.length);
+    setTile("t-wait", waitingMine.length);
+    setTile("t-busy", busy.length);
+    setTile("t-err", errors10);
+    setTile("t-apm", perMinute >= 10 ? Math.round(perMinute) : Math.round(perMinute * 10) / 10);
+    $("t-wait-tile").classList.toggle("lit", waitingMine.length > 0);
+    $("t-err-tile").classList.toggle("lit", errors10 > 0);
+
+    const headline = $("headline");
+    const parts = [];
+    if (!list.length) {
+      headline.textContent = "The room is empty. Start a session and your agent walks in.";
+    } else {
+      if (waitingMine.length) parts.push([`${listNames(waitingMine.map((a) => a.nick))} ${waitingMine.length > 1 ? "are" : "is"} waiting for you.`, "em"]);
+      if (struggling.length) parts.push([`${listNames(struggling.map((a) => a.nick))} ${struggling.length > 1 ? "keep" : "keeps"} hitting errors.`, "bad"]);
+      if (snagged.length) parts.push([`${listNames(snagged.map((a) => a.nick))} just hit a snag.`, "bad"]);
+      if (busy.length) {
+        const lead = busy.filter((a) => a.state !== "error").sort((x, y) => y.recent - x.recent)[0];
+        const verb = lead ? ` ${lead.nick} is ${lc(lead.state === "think" ? "thinking" : lead.say.replace(/[.…]+$/, ""))}.` : "";
+        parts.push([`${busy.length} ${busy.length > 1 ? "agents are" : "agent is"} heads-down.${verb}`, ""]);
+      }
+      if (waitingOthers.length && parts.length < 3) {
+        const byUser = [...new Set(waitingOthers.map((a) => a.s.user_name))];
+        parts.push([`${listNames(byUser)} ${byUser.length > 1 ? "have" : "has"} agents waiting on them.`, ""]);
+      }
+      if (!parts.length) parts.push(["Everyone's quiet. Bots are napping.", ""]);
+      const nodes = [];
+      parts.slice(0, 3).forEach(([text, cls], i) => {
+        if (i) nodes.push(document.createTextNode(" "));
+        nodes.push(cls ? el(cls === "em" ? "em" : "span", text, cls === "em" ? "" : cls) : document.createTextNode(text));
+      });
+      if (headline.textContent !== parts.slice(0, 3).map((p) => p[0]).join(" ")) headline.replaceChildren(...nodes);
+    }
+    document.title = waitingMine.length ? `(${waitingMine.length}) Your turn · build101` : "build101 team room";
+  }
+
+  // ---------- Play-by-play ----------
+  function playRows() {
+    const ids = picked ? [picked] : teamSessions.map((s) => s.session_id);
+    const rows = [];
+    for (const id of ids) {
+      const session = teamSessions.find((s) => s.session_id === id);
+      if (!session) continue;
+      const open = [];
+      for (const ev of timeline(id).list) {
+        const d = describe(ev);
+        if (ev.type === "pre_action") {
+          const row = { id, session, ev, d, at: ev.at, status: d.kind === "wait" ? "asking" : "running" };
+          rows.push(row);
+          open.push(row);
+        } else if (ev.type === "post_action") {
+          const failed = d.kind === "error";
+          let index = -1;
+          for (let i = open.length - 1; i >= 0; i--) if (failed || open[i].ev.summary === ev.summary) { index = i; break; }
+          if (index >= 0) {
+            const row = open.splice(index, 1)[0];
+            row.status = failed ? "error" : "ok";
+            row.end = ev.at;
+            if (failed) row.detail = d.detail;
+          } else if (failed) {
+            rows.push({ id, session, ev, d, at: ev.at, status: "error", detail: d.detail });
+          }
+        } else if (ev.type !== "post_action") {
+          rows.push({ id, session, ev, d, at: ev.at, status: ev.type });
+        }
+      }
+      // Nothing came back for these: they ran before the window we fetched, or the session moved on
+      for (const row of open) if (Date.now() - row.at > 10 * 60 * 1000) row.status = "unknown";
+    }
+    return rows.filter((r) => !onlyErrors || r.status === "error" || r.d.kind === "error").sort((x, y) => y.at - x.at).slice(0, 90);
+  }
+
+  function playNode(r) {
+    const mine = Boolean(me && r.session.user_name === me.user);
+    let kind = r.d.kind, text = r.d.text;
+    if (r.ev.type === "intent" && kind === "human") text = `${mine ? "You" : r.session.user_name}: “${clip(r.d.text, 200)}”`;
+    if (r.ev.type === "stop") text = mine ? "Finished. Waiting for you." : `Finished. Waiting for ${r.session.user_name}.`;
+    if (r.status === "error" && r.ev.type === "pre_action") kind = "error";
+    const li = el("li", null, `act k-${kind} s-${r.status}`);
+    li.style.setProperty("--who", colorOf(r.session.user_name));
+    li.title = r.ev.summary || "";
+    const time = el("time", new Date(r.at).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit", second: "2-digit", hour12: false }));
+    const who = el("span", null, "who");
+    who.append(el("i"), document.createTextNode(nickOf(r.id)));
+    const icon = el("span", null, "ic");
+    icon.innerHTML = ICONS[kind] || ICONS.plan;
+    const txt = el("span", text, "txt");
+    if (r.ev.payload?.agent_id) txt.append(el("span", "helper", "muted"));
+    let res = el("span", "", "res");
+    if (r.status === "running") { res = el("span", null, "res running"); res.append(el("i", null, "spin"), document.createTextNode(dur(Date.now() - r.at))); }
+    else if (r.status === "asking") res = el("span", "waiting for an answer", "res running");
+    else if (r.status === "ok") res = el("span", took(r.end - r.at), "res ok");
+    else if (r.status === "error") { res = el("span", r.detail || "failed", "res error"); res.title = r.detail || ""; }
+    li.append(time, who, icon, txt, res);
+    return li;
+  }
+
+  function renderPlays() {
+    const list = $("plays");
+    const rows = playRows();
+    $("clear-pick").hidden = !picked;
+    $("plays-note").textContent = picked
+      ? `Only ${nickOf(picked)}, newest first.`
+      : "Every tool call in plain words, with how it ended. Hover a line for the raw command.";
+    if (!rows.length) {
+      const empty = el("li", null, "empty");
+      empty.append(el("strong", onlyErrors ? "No errors in view. Nice." : "Nothing happened yet."),
+        document.createTextNode(onlyErrors ? "Failed commands and edits show up here." : "As agents work, each step shows up here in plain words."));
+      list.replaceChildren(empty);
+      return;
+    }
+    list.replaceChildren(...rows.map(playNode));
+  }
+  function playsSoon() {
+    if (playsTimer) return;
+    playsTimer = setTimeout(() => { playsTimer = null; renderPlays(); }, 400);
+  }
+
+  function pick(id) {
+    picked = id;
+    renderStage();
+    renderPlays();
+  }
+
+  // ---------- Scorecard: the six numbers per person, and the detectors that can run on hooks ----------
+  let scorePeriod = 1440, scoreAt = 0, scoreSessions = [], scoreLoading = null;
+
+  async function loadScore(force = false) {
+    if (!apiKey) return;
+    if (scoreLoading) return scoreLoading;
+    if (!force && Date.now() - scoreAt < 5 * 60 * 1000) return renderScore();
+    scoreLoading = (async () => {
+      const period = scorePeriod;
+      const { sessions } = await api(`/sessions?active_minutes=${period}`);
+      for (const s of sessions) sessionMeta.set(s.session_id, s);
+      const real = sessions.filter((s) => Number(s.event_count) >= 5);
+      // Old sessions don't change: fetch a session again only once it has new events
+      const queue = real.filter((s) => {
+        const t = timeline(s.session_id);
+        return !t.list.length || new Date(s.last_event_at).getTime() > t.list[t.list.length - 1].at + 1000;
+      });
+      await Promise.all(Array.from({ length: 4 }, async () => {
+        while (queue.length) {
+          const s = queue.shift();
+          timeline(s.session_id).fetchedAt = Date.now();
+          try {
+            addEvents(s.session_id, (await api(`/sessions/${encodeURIComponent(s.session_id)}/events?limit=500`)).events);
+          } catch { /* a missing session only leaves a gap in the numbers */ }
+        }
+      }));
+      if (period === scorePeriod) { scoreSessions = real; scoreAt = Date.now(); }
+    })().finally(() => { scoreLoading = null; });
+    await scoreLoading.catch(() => {});
+    renderScore();
+  }
+
+  function scoreRow(label, user, sessions, f) {
+    const n = numbers(f);
+    const tr = el("tr", null, user ? "" : "team");
+    const name = el("span", null, "person");
+    if (user) {
+      name.style.setProperty("--who", colorOf(user));
+      name.append(el("i"));
+    }
+    name.append(document.createTextNode(label));
+    const nameCell = el("td");
+    nameCell.append(name);
+    const k = el("td", fmtK(n.K));
+    const bar = el("span", null, "kbar");
+    const fill = el("i");
+    fill.style.width = `${Math.round((n.K || 0) * 100)}%`;
+    bar.append(fill);
+    k.append(bar);
+    k.title = `${f.capital} reusable, ${f.adhoc} ad hoc, ${f.base} plain reads and edits`;
+    const fr = el("td", fmtF(n.F), n.F >= 8 ? "hot" : "");
+    fr.title = `${f.errors} errors, ${f.corrections} corrections, ${f.acts} actions`;
+    const l = el("td", String(fmtL(n.L)));
+    l.title = `${f.acts} actions (${f.helperActs} by helpers) for ${f.human} prompts`;
+    tr.append(nameCell, el("td", String(sessions)), el("td", fmtMin(f.activeMs)), l, k, fr,
+      el("td", `${(n.E * 100).toFixed(1)}%`), el("td", f.waits.length ? `${fmtMin(n.waited)} in ${f.waits.length}` : "–"));
+    return tr;
+  }
+
+  function renderScore() {
+    const from = Date.now() - scorePeriod * 60 * 1000;
+    const per = scoreSessions
+      .map((s) => ({ s, user: s.user, nick: nickOf(s.session_id), f: factsOf(timeline(s.session_id).list, from) }))
+      .filter((x) => x.f.acts || x.f.human);
+    const body = $("score-body");
+    if (!per.length) {
+      const tr = el("tr");
+      const td = el("td", scoreLoading ? "Adding up the sessions…" : "No sessions in this period.");
+      td.colSpan = 8;
+      tr.append(td);
+      body.replaceChildren(tr);
+      $("insights").replaceChildren();
+      return;
+    }
+    const byUser = new Map();
+    for (const x of per) {
+      if (!byUser.has(x.user)) byUser.set(x.user, []);
+      byUser.get(x.user).push(x);
+    }
+    const rows = [...byUser.entries()]
+      .sort((a, b) => b[1].length - a[1].length)
+      .map(([user, xs]) => scoreRow(me && user === me.user ? `${user} (you)` : user, user, xs.length, sumFacts(xs.map((x) => x.f))));
+    if (byUser.size > 1) rows.push(scoreRow("Whole team", null, per.length, sumFacts(per.map((x) => x.f))));
+    body.replaceChildren(...rows);
+    renderInsights(per);
+  }
+
+  function zScorer(values) {
+    const mean = values.reduce((x, y) => x + y, 0) / values.length;
+    const sd = Math.sqrt(values.reduce((x, y) => x + (y - mean) ** 2, 0) / values.length);
+    return (v) => (sd ? (v - mean) / sd : 0);
+  }
+
+  // The catalog of DIK-INSIGHTS, limited to what the hooks can see today
+  function renderInsights(per) {
+    const out = [];
+    const all = sumFacts(per.map((x) => x.f));
+    const total = numbers(all);
+
+    if (total.waited >= 10 * 60 * 1000) {
+      const waitedBy = [...new Set(per.map((x) => x.user))]
+        .map((user) => [user, numbers(sumFacts(per.filter((x) => x.user === user).map((x) => x.f))).waited])
+        .sort((a, b) => b[1] - a[1]);
+      out.push({ type: "notify", label: "Human turn · new signal", rank: total.waited / 60000,
+        title: `Agents sat waiting for people for ${fmtMin(total.waited)}`,
+        evidence: `${all.waits.length} waits, ${fmtMin(median(all.waits))} in the middle, the longest ${fmtMin(Math.max(...all.waits))}. Most of it on ${waitedBy[0][0]} (${fmtMin(waitedBy[0][1])}).`,
+        todo: "The tab already says \"Your turn\". A desktop ping, or a queue of small tasks for the agent, would cut it." });
+    }
+
+    const tokens = new Map();
+    for (const x of per) {
+      for (const [tok, count] of x.f.tokens) {
+        const t = tokens.get(tok) || { n: 0, sessions: 0, users: new Set() };
+        t.n += count;
+        t.sessions++;
+        t.users.add(x.user);
+        tokens.set(tok, t);
+      }
+    }
+    // Rule of three: only what shows up in three sessions or more
+    for (const [tok, t] of [...tokens.entries()].filter(([, t]) => t.sessions >= 3).sort((a, b) => b[1].n - a[1].n).slice(0, 2)) {
+      out.push({ type: tok === "agent" ? "build" : "tool", label: "Deterministic repetition · #3", rank: t.n,
+        title: `${tokenLabel(tok)} keep coming back`,
+        evidence: `${t.n} times in ${t.sessions} sessions (${listNames([...t.users])}).`,
+        todo: tok === "agent" ? "Give the recurring job its own subagent that returns only the summary." : "Same steps every time: make it a script in the repo or an MCP tool, so the next agent doesn't rebuild it." });
+    }
+
+    const loops = [];
+    for (const x of per) for (const fail of x.f.fails.values()) if (fail.n >= 2) loops.push({ ...fail, x });
+    for (const loop of loops.sort((a, b) => b.n - a.n).slice(0, 2)) {
+      out.push({ type: "rule", label: "Rediscovered knowledge · #5", rank: loop.n * 10,
+        title: `${describe(loop.ev).text} failed ${loop.n} times`,
+        evidence: `In ${loop.x.nick}'s session (${loop.x.user}). Last error: ${loop.detail || "no detail"}.`,
+        todo: "Write down what makes it work, in CLAUDE.md or the team thread, so the next agent gets it right first." });
+    }
+
+    const candidates = per.filter((x) => x.f.acts >= 20 && x.f.human >= 1);
+    if (candidates.length >= 3) {
+      const nums = candidates.map((x) => numbers(x.f));
+      const zL = zScorer(nums.map((n) => n.L)), zK = zScorer(nums.map((n) => n.K || 0)), zF = zScorer(nums.map((n) => n.F));
+      const best = candidates
+        .map((x, i) => ({ x, n: nums[i], S: zL(nums[i].L) + zK(nums[i].K || 0) - zF(nums[i].F) }))
+        .sort((a, b) => b.S - a.S)[0];
+      const mission = missionOf(best.x.s, timeline(best.x.s.session_id).list);
+      out.push({ type: "copy", label: "Star session · #2", rank: 40,
+        title: `${best.x.nick} (${best.x.user}) is the session to copy`,
+        evidence: `${fmtL(best.n.L)} actions per prompt, ${fmtK(best.n.K)} reusable, friction ${fmtF(best.n.F)}.${mission ? ` Asked: “${clip(mission, 90)}”` : ""}`,
+        todo: "Look at how it was asked and what it used; that is the template or skill to share." });
+    }
+
+    if (total.K !== null && all.capital + all.adhoc >= 20 && total.K < 0.25) {
+      out.push({ type: "build", label: "Are we capitalizing? · K", rank: 30,
+        title: `Only ${fmtK(total.K)} of the real work goes through reusable tools`,
+        evidence: `${all.adhoc} ad hoc actions (Python one-offs, curl, ssh, browser, helpers) against ${all.capital} through skills, repo scripts or domain MCPs.`,
+        todo: "K is the number the method wants up. Start with the most repeated ad hoc action." });
+    }
+
+    const delegators = per.filter((x) => x.f.acts >= 30 && x.f.helperActs / x.f.acts >= 0.3).sort((a, b) => b.f.helperActs - a.f.helperActs);
+    if (delegators.length) {
+      const d = delegators[0];
+      out.push({ type: "copy", label: "Context friction · #6", rank: 20,
+        title: `${d.nick} handed ${Math.round((100 * d.f.helperActs) / d.f.acts)}% of its work to helpers`,
+        evidence: `${d.f.helperActs} of ${d.f.acts} actions ran in ${d.f.subagents || "its"} subagent${d.f.subagents === 1 ? "" : "s"}, so the main context stayed small.`,
+        todo: "Long reads and checks are good helper jobs. Compactions would confirm it once the hooks send them." });
+    }
+
+    if (all.corrections >= 2) {
+      out.push({ type: "rule", label: "Comprehension friction · #7", rank: all.corrections * 5,
+        title: `${all.corrections} prompts open by correcting Claude`,
+        evidence: "They start with \"no\", \"otra vez\", \"sigue sin\" and the like. The regex is noisy; the work card has the final say.",
+        todo: "If it is the same correction, make it a rule in CLAUDE.md or memory." });
+    }
+
+    const risky = per.flatMap((x) => x.f.risky.map((e) => ({ e, x })));
+    if (risky.length) {
+      out.push({ type: "hook", label: "Risk · #9", rank: 1000,
+        title: `${risky.length} risky command${risky.length > 1 ? "s" : ""}: production writes, force pushes or deletes`,
+        evidence: `${describe(risky[0].e).text}, in ${risky[0].x.nick}'s session (${risky[0].x.user}).`,
+        todo: "A PreToolUse hook can ask before these run." });
+    }
+
+    const list = $("insights");
+    if (!out.length) {
+      const empty = el("li", null, "insight");
+      empty.append(el("strong", "No patterns yet."), el("p", "Most detectors need the same thing in three sessions or more (the rule of three)."));
+      list.replaceChildren(empty);
+      return;
+    }
+    list.replaceChildren(...out.sort((a, b) => b.rank - a.rank).slice(0, 6).map((i) => {
+      const li = el("li", null, `insight i-${i.type}`);
+      const head = el("header");
+      head.append(el("span", i.type, "ibadge"), el("span", i.label, "itype"));
+      li.append(head, el("strong", i.title), el("p", i.evidence), el("p", i.todo, "act-line"));
+      return li;
+    }));
+  }
+
+  // ---------- File map ----------
   function renderFiles(sessions) {
     const files = new Map();
     for (const s of sessions) {
@@ -323,7 +1737,7 @@
         if (!files.has(path)) files.set(path, new Map());
         const who = files.get(path);
         const prev = who.get(s.session_id);
-        who.set(s.session_id, { user: s.user_name, editing: editing || (prev && prev.editing) });
+        who.set(s.session_id, { user: s.user_name, nick: nickOf(s.session_id), editing: editing || (prev && prev.editing) });
       };
       (s.touching || []).forEach((p) => touch(p, false));
       (s.editing || []).forEach((p) => touch(p, true));
@@ -351,16 +1765,16 @@
       for (const w of row.list) {
         const dot = el("i", null, w.editing ? "dot edit" : "dot");
         dot.style.setProperty("--who", colorOf(w.user));
-        dot.title = `${w.user} ${w.editing ? "is editing" : "read or ran"} this file`;
+        dot.title = `${w.nick} (${w.user}) ${w.editing ? "is editing" : "read or ran"} this file`;
         who.append(dot);
       }
       li.append(path, who);
       const meet = row.editors >= 2 || (row.editors >= 1 && row.sessions >= 2);
       if (meet) {
         li.classList.add("meet");
-        const names = [...new Set(row.list.map((w) => w.user))];
+        const names = [...new Set(row.list.map((w) => w.nick))];
         const text = row.editors >= 2
-          ? `${names.join(" and ")} are both editing this; their agents were told about each other.`
+          ? `${listNames(names)} are both editing this; their agents were told about each other.`
           : `Edited by one session while another has it open.`;
         li.append(el("div", text, "note"));
       }
@@ -515,32 +1929,74 @@
     repo = current;
   }
 
+  // Each live session's recent events, fetched again only once it has moved on
+  async function loadTimelines(sessions) {
+    const now = Date.now();
+    await Promise.all(sessions.map(async (s) => {
+      const t = timeline(s.session_id);
+      const moved = new Date(s.last_event_at).getTime() > (t.list.length ? t.list[t.list.length - 1].at : 0);
+      const due = !t.fetchedAt || (moved && now - t.fetchedAt > 15000) || now - t.fetchedAt > 60000;
+      if (!due) return;
+      t.fetchedAt = now;
+      const { events } = await api(`/sessions/${encodeURIComponent(s.session_id)}/events?limit=${EVENTS_LIMIT}`);
+      addEvents(s.session_id, events);
+      // Long sessions push the person's request out of the window; look further back once to find it
+      if (!t.deep && events.length >= EVENTS_LIMIT && !hasHumanPrompt(t.list)) {
+        t.deep = true;
+        api(`/sessions/${encodeURIComponent(s.session_id)}/events?limit=500`)
+          .then((older) => { addEvents(s.session_id, older.events); renderStage(); })
+          .catch(() => {});
+      }
+    }));
+  }
+
   async function refresh() {
     if (!apiKey || !repo) return;
     try {
-      const [team, msgs] = await Promise.all([api(`/team?repo=${encodeURIComponent(repo)}`), api("/messages?limit=100")]);
-      renderRoster(team.sessions);
+      const [team, msgs, meta] = await Promise.all([
+        api(`/team?repo=${encodeURIComponent(repo)}`), api("/messages?limit=100"), api("/sessions?active_minutes=240"),
+      ]);
+      for (const row of meta.sessions) sessionMeta.set(row.session_id, row);
+      // Draw a bot only once its history is in, so it shows up in its real state instead of moving there
+      await loadTimelines(team.sessions).catch(() => {});
+      teamSessions = team.sessions;
+      renderStage();
+      renderPlays();
       renderFiles(team.sessions);
       renderThread(msgs.messages);
     } catch (err) {
       if (err.message === "unauthorized") signOut("Your key was revoked or is invalid.");
     }
   }
-  function refreshSoon() {
+  function refreshSoon(wait = 1500) {
     clearTimeout(refreshTimer);
-    refreshTimer = setTimeout(refresh, 700);
+    refreshTimer = setTimeout(refresh, wait);
   }
 
-  function addFeedItem(item) {
-    const li = el("li");
-    const when = el("span", new Date(item.ts || Date.now()).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit", second: "2-digit" }), "muted");
-    const who = el("strong", item.user);
-    who.style.color = colorOf(item.user || "?");
-    li.append(when, who, el("span", `${item.type}  ${item.summary || ""}`, "mono"));
-    const feed = $("feed");
-    feed.prepend(li);
-    while (feed.children.length > 150) feed.lastChild.remove();
-    $("feed-count").textContent = `(${feed.children.length})`;
+  // A live event: the bot reacts right away, the slower data catches up on the next refresh
+  function onFeedItem(item) {
+    if (item.agent === "team") return refreshSoon(700);
+    const session = teamSessions.find((s) => s.session_id === item.session_id);
+    if (!session) {
+      // A new session, or one in another repo: look again, but not on every event
+      if (Date.now() - lastUnknownRefresh > 5000) { lastUnknownRefresh = Date.now(); refreshSoon(700); }
+      return;
+    }
+    session.last_event_at = item.ts;
+    session.last_summary = item.summary;
+    if (item.type === "intent") session.intent = item.summary;
+    addEvents(item.session_id, [{ id: item.id, type: item.type, summary: item.summary, ts: item.ts }]);
+    const card = cards.get(item.session_id);
+    if (card) {
+      const t = timeline(item.session_id);
+      const ev = t.byId.get(String(item.id));
+      const kind = ev ? describe(ev).kind : "plan";
+      spark(card, kind);
+      if (kind === "error") jolt(card);
+    }
+    renderStage();
+    playsSoon();
+    refreshSoon();
   }
 
   function setLive(on, text) {
@@ -570,7 +2026,7 @@
             const data = chunk.split("\n").find((line) => line.startsWith("data: "));
             if (data) {
               const item = safe(() => JSON.parse(data.slice(6)));
-              if (item) { addFeedItem(item); refreshSoon(); }
+              if (item) onFeedItem(item);
             }
           }
         }
@@ -605,6 +2061,7 @@
       await loadRepos();
       showVersion();
       refresh();
+      loadScore(true);
       connectFeed();
     } catch (err) {
       apiKey = null;
@@ -632,8 +2089,26 @@
   $("logout").addEventListener("click", () => signOut());
   $("repo").addEventListener("change", (event) => {
     repo = event.target.value;
+    picked = null;
     safe(() => localStorage.setItem(REPO_KEY, repo));
     refresh();
+  });
+  $("only-errors").addEventListener("click", (event) => {
+    onlyErrors = !onlyErrors;
+    event.currentTarget.setAttribute("aria-pressed", String(onlyErrors));
+    renderPlays();
+  });
+  $("clear-pick").addEventListener("click", () => pick(null));
+  document.querySelectorAll("[data-period]").forEach((button) => button.addEventListener("click", () => {
+    scorePeriod = Number(button.dataset.period);
+    document.querySelectorAll("[data-period]").forEach((b) => b.setAttribute("aria-pressed", String(b === button)));
+    scoreSessions = [];
+    renderScore();
+    loadScore(true);
+  }));
+  $("t-wait-tile").addEventListener("click", () => {
+    const first = $("stage").querySelector(".agent.st-wait.mine");
+    if (first) first.scrollIntoView({ behavior: reduceMotion.matches ? "auto" : "smooth", block: "center" });
   });
   document.querySelectorAll('input[name="kind"]').forEach((input) => input.addEventListener("change", () => {
     const [placeholder, hint, label] = KIND_HINTS[input.value];
@@ -663,6 +2138,10 @@
 
   setInterval(refresh, 10000);
   setInterval(() => apiKey && loadRepos().catch(() => {}), 60000);
+  // Timers and naps move on their own: a running command's clock, a bot falling asleep
+  setInterval(() => { if (apiKey && teamSessions.length) renderStage(); }, 1000);
+  setInterval(() => { if (apiKey) playsSoon(); }, 5000);
+  setInterval(() => loadScore().catch(() => {}), 30000);
   const saved = safe(() => localStorage.getItem(STORAGE_KEY));
   if (saved) signIn(saved);
 </script>
