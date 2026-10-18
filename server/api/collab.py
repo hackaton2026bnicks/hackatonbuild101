@@ -6,6 +6,7 @@ Nothing is ever blocked: when two sessions meet on a file, both are told, so the
 """
 
 import hashlib
+import os
 import re
 import time
 from datetime import UTC, datetime
@@ -33,8 +34,9 @@ PRESENCE_MINUTES = 30
 GIT_SWITCH = re.compile(r"\bgit\s+(checkout|switch|stash|rebase|merge|pull|cherry-pick|reset\s+--hard)\b")
 SHARED_CHECKOUT_MINUTES = 30
 MAX_PRESENCE_SESSIONS = 5
-# Share of discovery deliveries that are recorded but not injected, to measure the effect honestly
-HOLDOUT_PERCENT = 10
+# Share of discovery deliveries that are recorded but not injected, to measure the effect honestly.
+# Off by default so a live demo never loses the note it shows; HOLDOUT_PERCENT=10 measures it again
+HOLDOUT_PERCENT = int(os.environ.get("HOLDOUT_PERCENT") or 0)
 # On a request, recipes are offered on their own (one per session); the other lessons go with them
 NOT_RECIPES = ("gotcha", "decision", "criterio", "recurso", "componente")
 
