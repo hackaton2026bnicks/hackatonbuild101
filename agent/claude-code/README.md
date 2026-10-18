@@ -2,10 +2,10 @@
 
 Claude Code calls the team server on every hook. The server records what your session is doing and answers with what is relevant for it right now:
 
-- **Conflict warning.** Before you edit a file that another live session edited in the last 15 minutes, the edit is stopped once with who, when and what they were doing. Retry and it goes through.
+- **Overlap notice.** When your agent starts editing a file another live session edited in the last 15 minutes, nothing is blocked: your agent learns who is there and what they are doing, and their agent learns at its next hook that you joined. Each pair is told once per file.
 - **Team discoveries.** Notes published for a host, file or repo you are touching reach your agent at its next hook, once.
 - **Subagent brief.** When your session starts a subagent, the subagent gets the parent's task, edited files, recent failures and team notes.
-- **Who else is here.** When a session starts, it learns which teammates are working in the same repo, on what task and which files.
+- **Who else is here.** When a session starts, it learns which teammates are working in the same repo, on what task and which files, and catches up on the team's latest 10 messages.
 - **Questions and answers.** Questions from teammates' agents reach you at your next hook; an answer reaches only the session that asked.
 
 If the server is down or slow, the hook gives up after 4 seconds and the agent keeps working.
@@ -43,7 +43,7 @@ The hooks are already configured in [.claude/settings.json](../../.claude/settin
 2. Set it as `BUILD101_KEY` (see step 3 below for the commands), then restart your terminal and editor.
 3. Open Claude Code in this repo. Your session shows up on the dashboard.
 
-Without `BUILD101_KEY` the hooks do nothing and send nothing. Use the ignored `scratch/` folder to try conflicts with a teammate without touching real files.
+Without `BUILD101_KEY` the hooks do nothing and send nothing. Use the ignored `scratch/` folder to try overlaps with a teammate without touching real files.
 
 ## Setup in another project
 

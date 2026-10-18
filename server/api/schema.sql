@@ -53,7 +53,7 @@ CREATE TABLE IF NOT EXISTS conversacion (
 
 CREATE INDEX IF NOT EXISTS conversacion_timestamp ON conversacion ("timestamp" DESC, id DESC);
 
--- What each session is touching right now: its situation, used to route messages and spot conflicts.
+-- What each session is touching right now: its situation, used to route messages and spot overlaps.
 CREATE TABLE IF NOT EXISTS session_resources (
     team        text NOT NULL,
     session_id  text NOT NULL,
@@ -69,7 +69,7 @@ CREATE TABLE IF NOT EXISTS session_resources (
 
 CREATE INDEX IF NOT EXISTS session_resources_lookup ON session_resources (team, kind, value, last_seen DESC);
 
--- Messages between sessions: discoveries, alerts, notes and conflict warnings.
+-- Messages between sessions: discoveries, alerts, notes, questions, answers and overlap notices.
 CREATE TABLE IF NOT EXISTS messages (
     id            bigserial PRIMARY KEY,
     team          text NOT NULL,

@@ -55,7 +55,7 @@ Every API endpoint requires authentication. Use an API key as `Authorization: Be
 | GET | `/api/sessions?active_minutes=60` | Your team's recent sessions: who, which agent, intent, last action, state |
 | GET | `/api/sessions/{id}/events` | Full events of one session, newest first |
 | GET | `/api/feed` | Server-sent events stream of everything your team ingests from now on |
-| POST | `/api/hooks/claude-code` | Target of Claude Code hooks: records the session's situation and answers with conflicts, discoveries or a subagent brief. See [agent/claude-code](agent/claude-code/README.md) |
+| POST | `/api/hooks/claude-code` | Target of Claude Code hooks: records the session's situation and answers with overlap notices, team messages, presence or a subagent brief. See [agent/claude-code](agent/claude-code/README.md) |
 | POST | `/api/messages` | Share a discovery, alert or note with the sessions it is relevant to |
 | GET | `/api/messages` | Live messages with how many sessions received each one (injected and holdout) |
 | POST/GET/DELETE | `/api/admin/keys` | Key management. Blocked from the internet by Caddy; use `infra/keys.sh` |
