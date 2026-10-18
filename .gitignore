@@ -13,3 +13,12 @@ data/
 # Personal Claude Code settings and a scratch area for trying build101 together
 .claude/settings.local.json
 scratch/
+
+# Resultados personales del análisis de sesiones (docs/INSIGHTS-EQUIPO.md): van al tablero, nunca al repo
+session-insights/
+facts*.jsonl
+cards*.jsonl
+batch_*.jsonl
+insights*.json
+hallazgos*.json
+resultado*.json
