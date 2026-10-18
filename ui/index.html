@@ -3,176 +3,539 @@
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
-  <title>build101 · team agents</title>
+  <title>build101 team room</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;600&family=Schibsted+Grotesk:wght@400;500;700;800&display=swap" rel="stylesheet">
   <style>
     :root {
-      --bg: #f5f6f8; --surface: #fff; --fg: #151a22; --muted: #5a6372; --line: #d6dae1;
-      --accent: #2f55e4; --ok: #0b7466; --warn: #a85c06; --bad: #b4312a;
+      --paper: #edf0f3; --surface: #ffffff; --ink: #1b2230; --muted: #5b6577; --line: #d3d9e1; --soft: #f5f7f9;
+      --accent: #2b4bb9; --accent-ink: #ffffff;
+      --amber: #a86500; --amber-bg: #fff1d1; --amber-line: #f0c46a;
+      --bad: #b4312a;
+      --p0: #2563eb; --p1: #059669; --p2: #9333ea; --p3: #db2777; --p4: #0891b2; --p5: #65a30d;
       color-scheme: light;
-      font-family: system-ui, "Segoe UI", sans-serif;
     }
     @media (prefers-color-scheme: dark) {
-      :root {
-        --bg: #0f1218; --surface: #171b23; --fg: #e6e9ef; --muted: #98a1b0; --line: #2c333f;
-        --accent: #7d9bff; --ok: #4fcab6; --warn: #f0a54a; --bad: #f08a82;
+      :root:not([data-theme="light"]) {
+        --paper: #12161d; --surface: #1a1f28; --ink: #e4e8ee; --muted: #9aa4b4; --line: #2b323d; --soft: #151a22;
+        --accent: #8ea6ff; --accent-ink: #10141b;
+        --amber: #f5b841; --amber-bg: #3a2c0f; --amber-line: #7a5a18;
+        --bad: #f08a82;
+        --p0: #6b9bff; --p1: #34d399; --p2: #c084fc; --p3: #f472b6; --p4: #22d3ee; --p5: #a3e635;
         color-scheme: dark;
       }
     }
     * { box-sizing: border-box; }
-    body { margin: 0; background: var(--bg); color: var(--fg); line-height: 1.5; padding: 24px 16px 64px; }
-    main { max-width: 1100px; margin: 0 auto; display: flex; flex-direction: column; gap: 24px; }
-    header { display: flex; justify-content: space-between; align-items: baseline; gap: 12px; flex-wrap: wrap; }
-    h1 { margin: 0; font-size: 1.5rem; }
-    h2 { margin: 0 0 10px; font-size: 1rem; }
-    .muted { color: var(--muted); font-size: 0.9rem; }
-    .card { background: var(--surface); border: 1px solid var(--line); border-radius: 8px; padding: 16px; min-width: 0; }
-    .grid { display: grid; grid-template-columns: 3fr 2fr; gap: 16px; align-items: start; }
-    @media (max-width: 800px) { .grid { grid-template-columns: 1fr; } }
-    table { width: 100%; border-collapse: collapse; font-size: 0.9rem; }
-    th { text-align: left; color: var(--muted); font-weight: 500; font-size: 0.75rem; text-transform: uppercase; letter-spacing: 0.05em; padding: 6px 8px; border-bottom: 1px solid var(--line); }
-    td { padding: 8px; border-bottom: 1px solid var(--line); vertical-align: top; }
-    .scroll { overflow-x: auto; }
-    code, .mono { font-family: ui-monospace, Consolas, monospace; font-size: 0.82rem; }
-    .pill { font-size: 0.75rem; padding: 1px 8px; border-radius: 99px; white-space: nowrap; border: 1px solid currentColor; }
-    .live { color: var(--ok); } .idle { color: var(--warn); } .ended { color: var(--muted); } .down { color: var(--bad); }
-    #feed { list-style: none; margin: 0; padding: 0; max-height: 520px; overflow-y: auto; display: flex; flex-direction: column; }
-    #feed li { padding: 8px 0; border-bottom: 1px solid var(--line); font-size: 0.88rem; }
-    #feed li .who { font-weight: 600; }
-    form { display: flex; gap: 8px; flex-wrap: wrap; }
-    input { flex: 1 1 280px; padding: 8px 10px; border: 1px solid var(--line); border-radius: 6px; background: var(--bg); color: var(--fg); font: inherit; }
-    button { padding: 8px 14px; border: 1px solid var(--line); border-radius: 6px; background: var(--accent); color: #fff; font: inherit; cursor: pointer; }
-    button.secondary { background: transparent; color: var(--fg); }
-    button:focus-visible, input:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+    body {
+      margin: 0; background: var(--paper); color: var(--ink);
+      font: 15px/1.5 "Schibsted Grotesk", system-ui, sans-serif;
+    }
+    .mono { font-family: "JetBrains Mono", ui-monospace, Consolas, monospace; font-size: 0.82rem; }
+    .muted { color: var(--muted); }
+    button, input, select, textarea { font: inherit; color: inherit; }
+    button { cursor: pointer; }
+    :focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+
+    /* Top bar */
+    .bar {
+      display: flex; align-items: center; gap: 16px; flex-wrap: wrap;
+      padding: 14px 24px; background: var(--surface); border-bottom: 1px solid var(--line);
+    }
+    .brand { font-weight: 800; font-size: 1.15rem; letter-spacing: -0.02em; margin: 0; }
+    .brand span { color: var(--muted); font-weight: 500; }
+    .repo-pick { display: flex; align-items: center; gap: 8px; }
+    .repo-pick select {
+      padding: 6px 10px; border: 1px solid var(--line); border-radius: 6px; background: var(--soft);
+      font-family: "JetBrains Mono", monospace; font-size: 0.85rem;
+    }
+    .bar .right { margin-left: auto; display: flex; align-items: center; gap: 14px; flex-wrap: wrap; font-size: 0.88rem; }
+    .signal { display: inline-flex; align-items: center; gap: 6px; }
+    .signal i { width: 8px; height: 8px; border-radius: 50%; background: var(--muted); display: inline-block; }
+    .signal.on i { background: var(--p1); box-shadow: 0 0 0 3px color-mix(in srgb, var(--p1) 25%, transparent); }
+    .signal.off i { background: var(--bad); }
+    .link { background: none; border: 0; padding: 0; color: var(--accent); text-decoration: underline; text-underline-offset: 3px; }
+
+    main { max-width: 1280px; margin: 0 auto; padding: 24px; display: grid; gap: 28px; }
+    h2 { font-size: 1.05rem; font-weight: 700; margin: 0; letter-spacing: -0.01em; }
+    .section-head { display: flex; align-items: baseline; gap: 12px; flex-wrap: wrap; margin-bottom: 12px; }
+    .section-head p { margin: 0; font-size: 0.88rem; }
+
+    /* Roster: one strip per live session */
+    .roster { display: grid; grid-template-columns: repeat(auto-fill, minmax(260px, 1fr)); gap: 12px; }
+    .person {
+      background: var(--surface); border: 1px solid var(--line); border-left: 5px solid var(--who);
+      border-radius: 4px 8px 8px 4px; padding: 12px 14px; min-width: 0;
+    }
+    .person header { display: flex; align-items: baseline; gap: 8px; }
+    .person strong { font-size: 1rem; }
+    .person .when { margin-left: auto; font-size: 0.8rem; }
+    .person .task { margin: 4px 0 6px; font-size: 0.92rem; overflow-wrap: anywhere; }
+    .person .last { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; color: var(--muted); }
+    .person.idle { opacity: 0.62; }
+    .tag { font-size: 0.75rem; padding: 0 7px; border-radius: 99px; background: var(--soft); border: 1px solid var(--line); color: var(--muted); }
+
+    /* Two columns: the file map is the hero, the thread sits beside it */
+    .split { display: grid; grid-template-columns: minmax(0, 7fr) minmax(0, 5fr); gap: 28px; align-items: start; }
+    @media (max-width: 960px) { .split { grid-template-columns: 1fr; } main { padding: 16px; } .bar { padding: 12px 16px; } }
+
+    .map { background: var(--surface); border: 1px solid var(--line); border-radius: 8px; overflow: hidden; }
+    .map ol { list-style: none; margin: 0; padding: 0; }
+    .file {
+      display: grid; grid-template-columns: minmax(0, 1fr) auto; align-items: center; gap: 12px;
+      padding: 9px 16px; border-bottom: 1px solid var(--line);
+    }
+    .file:last-child { border-bottom: 0; }
+    .file .path { overflow-wrap: anywhere; }
+    .file .path .dir { color: var(--muted); }
+    .file .path .name { font-weight: 600; }
+    .file .who { display: flex; gap: 5px; align-items: center; }
+    .dot { width: 14px; height: 14px; border-radius: 50%; border: 2.5px solid var(--who); background: transparent; }
+    .dot.edit { background: var(--who); }
+    .file.meet { background: var(--amber-bg); border-bottom-color: var(--amber-line); }
+    .file.meet .note { grid-column: 1 / -1; color: var(--amber); font-size: 0.84rem; font-weight: 500; margin-top: -2px; }
+    .legend { display: flex; gap: 16px; align-items: center; font-size: 0.82rem; color: var(--muted); }
+    .legend span { display: inline-flex; gap: 6px; align-items: center; }
+    .legend .dot { --who: var(--muted); width: 11px; height: 11px; border-width: 2px; }
+    .legend .swatch { width: 14px; height: 10px; background: var(--amber-bg); border: 1px solid var(--amber-line); border-radius: 2px; }
+
+    /* Thread */
+    .compose { background: var(--surface); border: 1px solid var(--line); border-radius: 8px; padding: 12px; display: grid; gap: 8px; margin-bottom: 14px; }
+    .compose .kinds { display: flex; gap: 4px; flex-wrap: wrap; }
+    .compose .kinds label { font-size: 0.85rem; padding: 3px 10px; border-radius: 99px; border: 1px solid var(--line); cursor: pointer; }
+    .compose .kinds input { position: absolute; opacity: 0; pointer-events: none; }
+    .compose .kinds input:checked + span { font-weight: 700; }
+    .compose .kinds label:has(input:checked) { border-color: var(--ink); background: var(--soft); }
+    .compose .kinds label:has(input:focus-visible) { outline: 2px solid var(--accent); outline-offset: 2px; }
+    textarea {
+      width: 100%; min-height: 64px; resize: vertical; padding: 8px 10px; border: 1px solid var(--line);
+      border-radius: 6px; background: var(--soft);
+    }
+    .row { display: flex; gap: 8px; align-items: center; flex-wrap: wrap; }
+    .row .hint { font-size: 0.82rem; margin-right: auto; }
+    .primary { padding: 7px 14px; border: 0; border-radius: 6px; background: var(--accent); color: var(--accent-ink); font-weight: 600; }
+    .quiet { padding: 6px 12px; border: 1px solid var(--line); border-radius: 6px; background: transparent; }
+
+    .thread { list-style: none; margin: 0; padding: 0; display: grid; gap: 10px; }
+    .msg { background: var(--surface); border: 1px solid var(--line); border-radius: 8px; padding: 10px 12px 10px 14px; position: relative; }
+    .msg::before { content: ""; position: absolute; left: 0; top: 10px; bottom: 10px; width: 3px; border-radius: 3px; background: var(--who); }
+    .msg header { display: flex; gap: 8px; align-items: baseline; flex-wrap: wrap; font-size: 0.86rem; }
+    .msg header strong { color: var(--ink); }
+    .msg .kind { font-weight: 600; }
+    .msg .when { margin-left: auto; color: var(--muted); font-size: 0.8rem; }
+    .msg p { margin: 4px 0 6px; overflow-wrap: anywhere; white-space: pre-wrap; }
+    .msg footer { display: flex; gap: 8px; flex-wrap: wrap; align-items: center; font-size: 0.8rem; color: var(--muted); }
+    .chip { padding: 0 6px; border-radius: 4px; background: var(--soft); border: 1px solid var(--line); }
+    .msg.alert .kind, .msg.overlap .kind, .msg.conflict .kind { color: var(--amber); }
+    .msg.overlap, .msg.conflict { background: var(--amber-bg); border-color: var(--amber-line); }
+    .msg.question .kind { color: var(--accent); }
+    .answers { list-style: none; margin: 8px 0 0; padding: 0 0 0 14px; border-left: 2px solid var(--line); display: grid; gap: 8px; }
+    .answers .msg { background: var(--soft); }
+    .reply { margin-top: 8px; display: grid; gap: 6px; }
+    .waiting { color: var(--accent); font-weight: 500; }
+
+    .empty { padding: 22px 16px; color: var(--muted); }
+    .empty strong { color: var(--ink); display: block; margin-bottom: 2px; }
+
+    details.activity { background: var(--surface); border: 1px solid var(--line); border-radius: 8px; padding: 10px 16px; }
+    details.activity summary { cursor: pointer; font-weight: 600; }
+    #feed { list-style: none; margin: 10px 0 0; padding: 0; max-height: 320px; overflow-y: auto; }
+    #feed li { padding: 5px 0; border-top: 1px solid var(--line); display: grid; grid-template-columns: 70px 110px minmax(0, 1fr); gap: 10px; font-size: 0.85rem; }
+    #feed li .mono { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+
+    /* Sign in */
+    .signin { max-width: 460px; margin: 12vh auto; padding: 0 16px; }
+    .signin h1 { font-size: 2.1rem; line-height: 1.1; letter-spacing: -0.03em; margin: 0 0 10px; font-weight: 800; }
+    .signin p { margin: 0 0 18px; color: var(--muted); }
+    .signin form { display: flex; gap: 8px; }
+    .signin input { flex: 1; padding: 9px 12px; border: 1px solid var(--line); border-radius: 6px; background: var(--surface); }
     .error { color: var(--bad); font-size: 0.9rem; }
+    @media (prefers-reduced-motion: no-preference) {
+      .fresh { animation: fresh 1.6s ease-out; }
+      @keyframes fresh { from { box-shadow: 0 0 0 3px color-mix(in srgb, var(--who) 45%, transparent); } to { box-shadow: 0 0 0 3px transparent; } }
+    }
   </style>
 </head>
 <body>
-<main>
-  <header>
-    <h1>Team agents</h1>
-    <span class="muted" id="status">api: checking… · mockbank: checking…</span>
-  </header>
 
-  <section class="card" id="login">
-    <h2>Sign in with your API key</h2>
-    <p class="muted">Ask whoever runs the server for a key (<code>./infra/create-key.sh your-name</code>). It stays in this browser only.</p>
-    <form id="login-form">
-      <label for="key" hidden>API key</label>
-      <input id="key" type="password" placeholder="b101_…" autocomplete="off" required>
-      <button type="submit">Sign in</button>
-    </form>
-    <p class="error" id="login-error" hidden></p>
-  </section>
+<section class="signin" id="login">
+  <h1>See what your team's agents are doing and telling each other.</h1>
+  <p>Sign in with your build101 key. It stays in this browser.</p>
+  <form id="login-form">
+    <label for="key" hidden>API key</label>
+    <input id="key" type="password" placeholder="b101_…" autocomplete="off" required>
+    <button class="primary" type="submit">Sign in</button>
+  </form>
+  <p class="error" id="login-error" hidden></p>
+  <p class="muted" style="margin-top:18px;font-size:.88rem">No key yet? Ask whoever runs the server to create one with <span class="mono">./infra/keys.sh create your-name</span>.</p>
+</section>
 
-  <div class="grid" id="app" hidden>
-    <section class="card">
-      <h2>What each agent is doing <span class="muted" id="me"></span></h2>
-      <div class="scroll">
-        <table>
-          <thead><tr><th>Person · agent</th><th>Intent</th><th>Last action</th><th>State</th></tr></thead>
-          <tbody id="sessions"><tr><td colspan="4" class="muted">No sessions in the last hour. Start an agent with the hooks installed and it shows up here.</td></tr></tbody>
-        </table>
-      </div>
-    </section>
-    <section class="card">
-      <h2>Live feed <span class="pill down" id="feed-state">connecting</span></h2>
-      <ul id="feed"><li class="muted" id="feed-empty">Waiting for events…</li></ul>
-      <p><button class="secondary" id="logout" type="button">Sign out</button></p>
-    </section>
+<div id="app" hidden>
+  <div class="bar">
+    <p class="brand">build101 <span>team room</span></p>
+    <div class="repo-pick">
+      <label for="repo" class="muted">Repo</label>
+      <select id="repo"></select>
+    </div>
+    <div class="right">
+      <span class="signal" id="live"><i></i><span>Connecting</span></span>
+      <span class="muted" id="version"></span>
+      <span id="me"></span>
+      <button class="link" id="logout" type="button">Sign out</button>
+    </div>
   </div>
-</main>
+
+  <main>
+    <section aria-labelledby="h-roster">
+      <div class="section-head">
+        <h2 id="h-roster">Working now</h2>
+        <p class="muted" id="roster-note"></p>
+      </div>
+      <div class="roster" id="roster"></div>
+    </section>
+
+    <div class="split">
+      <section aria-labelledby="h-map">
+        <div class="section-head">
+          <h2 id="h-map">Files in play</h2>
+          <div class="legend">
+            <span><i class="dot edit"></i>editing</span>
+            <span><i class="dot"></i>reading or running</span>
+            <span><i class="swatch"></i>two sessions on one file</span>
+          </div>
+        </div>
+        <div class="map"><ol id="files"></ol></div>
+      </section>
+
+      <section aria-labelledby="h-thread">
+        <div class="section-head">
+          <h2 id="h-thread">Team thread</h2>
+          <p class="muted" id="reach"></p>
+        </div>
+        <form class="compose" id="compose">
+          <div class="kinds" role="radiogroup" aria-label="Kind of message">
+            <label><input type="radio" name="kind" value="discovery" checked><span>Discovery</span></label>
+            <label><input type="radio" name="kind" value="question"><span>Question</span></label>
+            <label><input type="radio" name="kind" value="note"><span>Note</span></label>
+            <label><input type="radio" name="kind" value="alert"><span>Alert</span></label>
+          </div>
+          <label for="body" hidden>Message</label>
+          <textarea id="body" maxlength="1000" placeholder="Something every agent in this repo should know" required></textarea>
+          <div class="row">
+            <span class="hint muted" id="compose-hint">Reaches the agents in this repo at their next step.</span>
+            <button class="primary" type="submit" id="send">Share</button>
+          </div>
+          <p class="error" id="compose-error" hidden></p>
+        </form>
+        <ol class="thread" id="thread"></ol>
+      </section>
+    </div>
+
+    <details class="activity">
+      <summary>Raw activity <span class="muted" id="feed-count"></span></summary>
+      <ul id="feed"></ul>
+    </details>
+  </main>
+</div>
 
 <script>
   const STORAGE_KEY = "build101-key";
-  const IDLE_SECONDS = 120;
-  let apiKey = null;
-  let feedAbort = null;
+  const REPO_KEY = "build101-repo";
+  const IDLE_SECONDS = 180;
+  const KIND_HINTS = {
+    discovery: ["Something every agent in this repo should know", "Reaches the agents in this repo at their next step.", "Share"],
+    question: ["What do you need to know from the team?", "Agents that know can answer it; answers show up here.", "Ask"],
+    note: ["A short note for the team", "Reaches every session on the team.", "Post note"],
+    alert: ["Something urgent, like a broken shared environment", "Delivered first, lasts one hour.", "Send alert"],
+  };
+  const KIND_LABEL = { discovery: "discovery", question: "question", answer: "answer", note: "note", alert: "alert", overlap: "overlap", conflict: "overlap" };
 
-  function store(value) {
-    try { value ? localStorage.setItem(STORAGE_KEY, value) : localStorage.removeItem(STORAGE_KEY); } catch {}
-  }
-  function stored() {
-    try { return localStorage.getItem(STORAGE_KEY); } catch { return null; }
-  }
+  let apiKey = null, me = null, repo = null, feedAbort = null, refreshTimer = null;
+  const people = new Map();
+  const seenMessages = new Set();
+
+  const $ = (id) => document.getElementById(id);
+  function safe(fn, fallback = null) { try { return fn(); } catch { return fallback; } }
   function el(tag, text, className) {
     const node = document.createElement(tag);
-    if (text !== undefined) node.textContent = text;
+    if (text !== undefined && text !== null) node.textContent = text;
     if (className) node.className = className;
     return node;
   }
-  function ago(iso) {
-    const seconds = Math.max(0, Math.round((Date.now() - new Date(iso)) / 1000));
-    if (seconds < 60) return `${seconds}s ago`;
-    if (seconds < 3600) return `${Math.round(seconds / 60)}m ago`;
-    return `${Math.round(seconds / 3600)}h ago`;
+  function colorOf(user) {
+    if (!people.has(user)) {
+      let h = 0;
+      for (const ch of user) h = (h * 31 + ch.charCodeAt(0)) >>> 0;
+      people.set(user, `var(--p${h % 6})`);
+    }
+    return people.get(user);
   }
-  async function api(path) {
-    const res = await fetch(`/api${path}`, { headers: { Authorization: `Bearer ${apiKey}` } });
+  function ago(iso) {
+    const s = Math.max(0, Math.round((Date.now() - new Date(iso)) / 1000));
+    if (s < 45) return "just now";
+    if (s < 3600) return `${Math.round(s / 60)} min ago`;
+    if (s < 129600) return `${Math.round(s / 3600)} h ago`;
+    return `${Math.round(s / 86400)} d ago`;
+  }
+  async function api(path, options = {}) {
+    const res = await fetch(`/api${path}`, {
+      ...options,
+      headers: { Authorization: `Bearer ${apiKey}`, "Content-Type": "application/json", ...(options.headers || {}) },
+    });
     if (res.status === 401) throw new Error("unauthorized");
-    if (!res.ok) throw new Error(`HTTP ${res.status}`);
+    if (!res.ok) {
+      const detail = await res.text().catch(() => "");
+      throw new Error(`HTTP ${res.status} ${detail.slice(0, 160)}`);
+    }
     return res.json();
   }
 
-  async function checkStatus() {
-    const parts = [];
-    for (const [name, url] of [["api", "/api/health"], ["mockbank", "/bank/health"]]) {
-      try {
-        const res = await fetch(url);
-        const body = await res.json();
-        parts.push(`${name}: ${res.ok ? "up" : "down"} · ${body.version || ""}`);
-      } catch {
-        parts.push(`${name}: down`);
-      }
+  // ---------- Roster and file map ----------
+  function renderRoster(sessions) {
+    const roster = $("roster");
+    if (!sessions.length) {
+      const empty = el("div", null, "empty");
+      empty.append(el("strong", "Nobody is working in this repo right now."),
+        document.createTextNode("Open Claude Code at the repo root with BUILD101_KEY set and the session appears here."));
+      roster.replaceChildren(empty);
+      $("roster-note").textContent = "";
+      return;
     }
-    document.getElementById("status").textContent = parts.join("  |  ");
+    const live = sessions.filter((s) => (Date.now() - new Date(s.last_event_at)) / 1000 <= IDLE_SECONDS).length;
+    $("roster-note").textContent = `${sessions.length} session${sessions.length > 1 ? "s" : ""}, ${live} active in the last 3 minutes`;
+    roster.replaceChildren(...sessions.map((s) => {
+      const card = el("article", null, "person");
+      card.style.setProperty("--who", colorOf(s.user_name));
+      if ((Date.now() - new Date(s.last_event_at)) / 1000 > IDLE_SECONDS) card.classList.add("idle");
+      const head = el("header");
+      head.append(el("strong", s.user_name));
+      if (s.you) head.append(el("span", "you", "tag"));
+      head.append(el("span", ago(s.last_event_at), "when muted"));
+      card.append(head, el("p", s.intent || "No task stated yet", "task"), el("div", s.last_summary, "last mono"));
+      return card;
+    }));
   }
 
-  async function refreshSessions() {
-    if (!apiKey) return;
+  function renderFiles(sessions) {
+    const files = new Map();
+    for (const s of sessions) {
+      const touch = (path, editing) => {
+        if (!files.has(path)) files.set(path, new Map());
+        const who = files.get(path);
+        const prev = who.get(s.session_id);
+        who.set(s.session_id, { user: s.user_name, editing: editing || (prev && prev.editing) });
+      };
+      (s.touching || []).forEach((p) => touch(p, false));
+      (s.editing || []).forEach((p) => touch(p, true));
+    }
+    const rows = [...files.entries()].map(([path, who]) => {
+      const list = [...who.values()];
+      return { path, list, editors: list.filter((w) => w.editing).length, sessions: list.length };
+    }).sort((a, b) => (b.editors >= 2) - (a.editors >= 2) || b.sessions - a.sessions || b.editors - a.editors || a.path.localeCompare(b.path));
+
+    const ol = $("files");
+    if (!rows.length) {
+      const empty = el("li", null, "empty");
+      empty.append(el("strong", "No files touched in the last 30 minutes."),
+        document.createTextNode("As agents read and edit, their files line up here, and files two sessions share turn amber."));
+      ol.replaceChildren(empty);
+      return;
+    }
+    ol.replaceChildren(...rows.slice(0, 60).map((row) => {
+      const li = el("li", null, "file");
+      const path = el("div", null, "path mono");
+      const cut = row.path.lastIndexOf("/");
+      if (cut >= 0) path.append(el("span", row.path.slice(0, cut + 1), "dir"));
+      path.append(el("span", row.path.slice(cut + 1), "name"));
+      const who = el("div", null, "who");
+      for (const w of row.list) {
+        const dot = el("i", null, w.editing ? "dot edit" : "dot");
+        dot.style.setProperty("--who", colorOf(w.user));
+        dot.title = `${w.user} ${w.editing ? "is editing" : "read or ran"} this file`;
+        who.append(dot);
+      }
+      li.append(path, who);
+      const meet = row.editors >= 2 || (row.editors >= 1 && row.sessions >= 2);
+      if (meet) {
+        li.classList.add("meet");
+        const names = [...new Set(row.list.map((w) => w.user))];
+        const text = row.editors >= 2
+          ? `${names.join(" and ")} are both editing this; their agents were told about each other.`
+          : `Edited by one session while another has it open.`;
+        li.append(el("div", text, "note"));
+      }
+      return li;
+    }));
+  }
+
+  // ---------- Thread ----------
+  function topicChips(topics) {
+    // The repo is already on screen; files and hosts say who else the message was routed to
+    return (topics || []).filter((t) => !t.startsWith("repo:")).map((t) => el("span", t.slice(t.indexOf(":") + 1), "chip mono"));
+  }
+
+  function messageNode(m, answers) {
+    const li = el("li", null, `msg ${m.kind}`);
+    li.style.setProperty("--who", colorOf(m.from_user));
+    if (!seenMessages.has(m.id)) {
+      if (seenMessages.size) li.classList.add("fresh");
+      seenMessages.add(m.id);
+    }
+    const head = el("header");
+    head.append(el("strong", m.from_user));
+    head.append(el("span", m.kind === "question" ? `asked question #${m.id}` : KIND_LABEL[m.kind] || m.kind, "kind"));
+    head.append(el("span", ago(m.created_at), "when"));
+    const foot = el("footer");
+    foot.append(...topicChips(m.topics));
+    const reached = Number(m.injected || 0);
+    foot.append(el("span", reached ? `reached ${reached} session${reached > 1 ? "s" : ""}` : "not delivered yet"));
+    if (Number(m.holdout || 0)) foot.append(el("span", `${m.holdout} held out to measure`));
+    li.append(head, el("p", m.body), foot);
+
+    if (m.kind === "question") {
+      if (answers.length) {
+        const list = el("ol", null, "answers");
+        list.append(...answers.map((a) => messageNode(a, [])));
+        li.append(list);
+      } else {
+        foot.append(el("span", "waiting for an answer", "waiting"));
+      }
+      const open = el("button", answers.length ? "Add an answer" : "Answer", "quiet");
+      open.type = "button";
+      open.addEventListener("click", () => {
+        open.remove();
+        li.append(replyForm(m));
+        li.querySelector("textarea").focus();
+      });
+      const wrap = el("div", null, "row");
+      wrap.style.marginTop = "8px";
+      wrap.append(open);
+      li.append(wrap);
+    }
+    return li;
+  }
+
+  function replyForm(question) {
+    const form = el("form", null, "reply");
+    const area = el("textarea");
+    area.maxLength = 1000;
+    area.required = true;
+    area.placeholder = `Answer ${question.from_user}'s question`;
+    area.setAttribute("aria-label", `Answer to question #${question.id}`);
+    const row = el("div", null, "row");
+    const hint = el("span", "Goes straight to the session that asked.", "hint muted");
+    const send = el("button", "Send answer", "primary");
+    send.type = "submit";
+    row.append(hint, send);
+    form.append(area, row);
+    form.addEventListener("submit", async (event) => {
+      event.preventDefault();
+      send.disabled = true;
+      try {
+        await api("/messages", { method: "POST", body: JSON.stringify({ kind: "answer", reply_to: question.id, body: area.value.trim(), repo }) });
+        refresh();
+      } catch (err) {
+        hint.textContent = `Not sent: ${err.message}`;
+        hint.className = "hint error";
+        send.disabled = false;
+      }
+    });
+    return form;
+  }
+
+  function renderThread(messages) {
+    const relevant = messages.filter((m) => !m.topics?.length || m.topics.some((t) => t === `repo:${repo}` || !t.startsWith("repo:")));
+    const answersByQuestion = new Map();
+    for (const m of relevant) {
+      if (m.kind === "answer" && m.reply_to) {
+        if (!answersByQuestion.has(m.reply_to)) answersByQuestion.set(m.reply_to, []);
+        answersByQuestion.get(m.reply_to).unshift(m);
+      }
+    }
+    const shown = new Set(relevant.filter((m) => m.kind === "question").map((m) => m.id));
+    const top = relevant.filter((m) => !(m.kind === "answer" && shown.has(m.reply_to)));
+
+    const reached = relevant.reduce((sum, m) => sum + Number(m.injected || 0), 0);
+    const open = relevant.filter((m) => m.kind === "question" && !answersByQuestion.has(m.id)).length;
+    $("reach").textContent = relevant.length
+      ? `${relevant.length} messages, ${reached} deliveries${open ? `, ${open} open question${open > 1 ? "s" : ""}` : ""}`
+      : "";
+
+    const thread = $("thread");
+    if (!top.length) {
+      const empty = el("li", null, "empty");
+      empty.append(el("strong", "Nothing shared yet."),
+        document.createTextNode("Agents post here with share_discovery and ask_team. You can post too, from the box above."));
+      thread.replaceChildren(empty);
+      return;
+    }
+    // Keep an open reply box alive across refreshes
+    if (thread.querySelector(".reply textarea:focus, .reply textarea:not(:placeholder-shown)")) return;
+    thread.replaceChildren(...top.slice(0, 40).map((m) => messageNode(m, answersByQuestion.get(m.id) || [])));
+  }
+
+  // ---------- Data ----------
+  async function loadRepos() {
+    const { repos } = await api("/repos");
+    const select = $("repo");
+    const names = repos.map((r) => r.repo);
+    const saved = safe(() => localStorage.getItem(REPO_KEY));
+    if (saved && !names.includes(saved)) names.push(saved);
+    if (!names.length) names.push("hackatonbuild101");
+    const current = repo && names.includes(repo) ? repo : saved && names.includes(saved) ? saved : names[0];
+    select.replaceChildren(...names.map((name) => {
+      const option = el("option", name);
+      option.value = name;
+      const info = repos.find((r) => r.repo === name);
+      if (info) option.textContent = `${name} (${info.sessions})`;
+      return option;
+    }));
+    select.value = current;
+    repo = current;
+  }
+
+  async function refresh() {
+    if (!apiKey || !repo) return;
     try {
-      const { sessions } = await api("/sessions?active_minutes=60");
-      const body = document.getElementById("sessions");
-      if (!sessions.length) return;
-      body.replaceChildren(...sessions.map((s) => {
-        const row = el("tr");
-        const who = el("td");
-        who.append(el("strong", s.user), document.createTextNode(` · ${s.agent}`));
-        who.append(el("div", s.session_id.slice(0, 12), "muted mono"));
-        const intent = el("td", s.intent || "—");
-        const last = el("td");
-        last.append(el("div", s.last_summary, "mono"), el("div", `${s.last_event_type} · ${ago(s.last_event_at)}`, "muted"));
-        const idle = (Date.now() - new Date(s.last_event_at)) / 1000 > IDLE_SECONDS;
-        const [label, cls] = s.ended_at ? ["ended", "ended"] : idle ? ["idle", "idle"] : ["working", "live"];
-        const state = el("td");
-        state.append(el("span", label, `pill ${cls}`));
-        row.append(who, intent, last, state);
-        return row;
-      }));
+      const [team, msgs] = await Promise.all([api(`/team?repo=${encodeURIComponent(repo)}`), api("/messages?limit=100")]);
+      renderRoster(team.sessions);
+      renderFiles(team.sessions);
+      renderThread(msgs.messages);
     } catch (err) {
       if (err.message === "unauthorized") signOut("Your key was revoked or is invalid.");
     }
   }
+  function refreshSoon() {
+    clearTimeout(refreshTimer);
+    refreshTimer = setTimeout(refresh, 700);
+  }
 
   function addFeedItem(item) {
-    document.getElementById("feed-empty")?.remove();
     const li = el("li");
-    li.append(el("span", item.user, "who"), document.createTextNode(` · ${item.agent} · ${item.type}`));
-    li.append(el("div", item.summary, "mono"));
-    const feed = document.getElementById("feed");
+    const when = el("span", new Date(item.ts || Date.now()).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit", second: "2-digit" }), "muted");
+    const who = el("strong", item.user);
+    who.style.color = colorOf(item.user || "?");
+    li.append(when, who, el("span", `${item.type}  ${item.summary || ""}`, "mono"));
+    const feed = $("feed");
     feed.prepend(li);
-    while (feed.children.length > 200) feed.lastChild.remove();
+    while (feed.children.length > 150) feed.lastChild.remove();
+    $("feed-count").textContent = `(${feed.children.length})`;
+  }
+
+  function setLive(on, text) {
+    const s = $("live");
+    s.className = `signal ${on ? "on" : "off"}`;
+    s.querySelector("span").textContent = text;
   }
 
   // EventSource cannot send an Authorization header, so the stream is read with fetch
   async function connectFeed() {
-    const state = document.getElementById("feed-state");
     while (apiKey) {
       feedAbort = new AbortController();
       try {
         const res = await fetch("/api/feed", { headers: { Authorization: `Bearer ${apiKey}` }, signal: feedAbort.signal });
         if (res.status === 401) return signOut("Your key was revoked or is invalid.");
-        state.textContent = "live";
-        state.className = "pill live";
+        setLive(true, "Live");
         const reader = res.body.pipeThrough(new TextDecoderStream()).getReader();
         let buffer = "";
         for (;;) {
@@ -181,62 +544,105 @@
           buffer += value;
           let cut;
           while ((cut = buffer.indexOf("\n\n")) >= 0) {
-            const message = buffer.slice(0, cut);
+            const chunk = buffer.slice(0, cut);
             buffer = buffer.slice(cut + 2);
-            const data = message.split("\n").find((line) => line.startsWith("data: "));
+            const data = chunk.split("\n").find((line) => line.startsWith("data: "));
             if (data) {
-              addFeedItem(JSON.parse(data.slice(6)));
-              refreshSessions();
+              const item = safe(() => JSON.parse(data.slice(6)));
+              if (item) { addFeedItem(item); refreshSoon(); }
             }
           }
         }
       } catch (err) {
         if (err.name === "AbortError") return;
       }
-      state.textContent = "reconnecting";
-      state.className = "pill down";
+      setLive(false, "Reconnecting");
       await new Promise((resolve) => setTimeout(resolve, 3000));
     }
   }
 
+  async function showVersion() {
+    try {
+      const health = await api("/health");
+      $("version").textContent = health.db === "ok" ? `api ${String(health.version).slice(0, 7)}` : "database down";
+    } catch {
+      $("version").textContent = "api unreachable";
+    }
+  }
+
+  // ---------- Session ----------
   async function signIn(key) {
     apiKey = key;
     try {
-      const me = await api("/me");
-      store(key);
-      document.getElementById("me").textContent = `· signed in as ${me.user} (${me.team})`;
-      document.getElementById("login").hidden = true;
-      document.getElementById("app").hidden = false;
-      refreshSessions();
+      me = await api("/me");
+      safe(() => localStorage.setItem(STORAGE_KEY, key));
+      $("me").textContent = me.user;
+      $("me").style.color = colorOf(me.user);
+      $("me").style.fontWeight = "700";
+      $("login").hidden = true;
+      $("app").hidden = false;
+      await loadRepos();
+      showVersion();
+      refresh();
       connectFeed();
     } catch (err) {
       apiKey = null;
-      const error = document.getElementById("login-error");
-      error.textContent = err.message === "unauthorized" ? "That key is not valid." : `Could not reach the API (${err.message}).`;
+      const error = $("login-error");
+      error.textContent = err.message === "unauthorized" ? "That key is not valid. Check it was copied whole, starting with b101_." : `Could not reach the server (${err.message}).`;
       error.hidden = false;
     }
   }
 
   function signOut(message) {
     apiKey = null;
-    store(null);
+    safe(() => localStorage.removeItem(STORAGE_KEY));
     feedAbort?.abort();
-    document.getElementById("app").hidden = true;
-    document.getElementById("login").hidden = false;
-    const error = document.getElementById("login-error");
+    $("app").hidden = true;
+    $("login").hidden = false;
+    const error = $("login-error");
     error.textContent = message || "";
     error.hidden = !message;
   }
 
-  document.getElementById("login-form").addEventListener("submit", (event) => {
+  $("login-form").addEventListener("submit", (event) => {
     event.preventDefault();
-    signIn(document.getElementById("key").value.trim());
+    signIn($("key").value.trim());
   });
-  document.getElementById("logout").addEventListener("click", () => signOut());
+  $("logout").addEventListener("click", () => signOut());
+  $("repo").addEventListener("change", (event) => {
+    repo = event.target.value;
+    safe(() => localStorage.setItem(REPO_KEY, repo));
+    refresh();
+  });
+  document.querySelectorAll('input[name="kind"]').forEach((input) => input.addEventListener("change", () => {
+    const [placeholder, hint, label] = KIND_HINTS[input.value];
+    $("body").placeholder = placeholder;
+    $("compose-hint").textContent = hint;
+    $("send").textContent = label;
+  }));
+  $("compose").addEventListener("submit", async (event) => {
+    event.preventDefault();
+    const kind = document.querySelector('input[name="kind"]:checked').value;
+    const body = $("body").value.trim();
+    const error = $("compose-error");
+    error.hidden = true;
+    $("send").disabled = true;
+    try {
+      // Notes reach the whole team; the rest is scoped to the repo on screen
+      await api("/messages", { method: "POST", body: JSON.stringify({ kind, body, repo, topics: kind === "note" ? [] : [`repo:${repo}`] }) });
+      $("body").value = "";
+      refresh();
+    } catch (err) {
+      error.textContent = `Not sent: ${err.message}`;
+      error.hidden = false;
+    } finally {
+      $("send").disabled = false;
+    }
+  });
 
-  checkStatus();
-  setInterval(refreshSessions, 10000);
-  const saved = stored();
+  setInterval(refresh, 10000);
+  setInterval(() => apiKey && loadRepos().catch(() => {}), 60000);
+  const saved = safe(() => localStorage.getItem(STORAGE_KEY));
   if (saved) signIn(saved);
 </script>
 </body>
