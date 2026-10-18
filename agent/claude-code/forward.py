@@ -58,6 +58,9 @@ def clean(text: str, secrets: list[str]) -> str:
 def sanitize(raw: dict, environ: dict) -> dict:
     secrets = env_secrets(environ)
     out = {field: str(raw[field])[:TEXT_LIMIT] for field in PLAIN_FIELDS if raw.get(field) is not None}
+    # The hook's cwd follows the agent's `cd`; the project root keeps the repo name and paths stable
+    if environ.get("CLAUDE_PROJECT_DIR"):
+        out["cwd"] = environ["CLAUDE_PROJECT_DIR"][:TEXT_LIMIT]
     for field in SCRUBBED_FIELDS:
         if isinstance(raw.get(field), str):
             out[field] = clean(raw[field], secrets)
