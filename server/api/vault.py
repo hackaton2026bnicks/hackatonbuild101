@@ -24,7 +24,8 @@ from pathlib import Path, PurePosixPath
 log = logging.getLogger("api.vault")
 
 KNOWLEDGE_DIR = "conocimiento"
-REFRESH_SECONDS = 10 * 60
+# How often the vault is pulled. A pull that finds nothing new is one small git fetch, so a demo can use 20
+REFRESH_SECONDS = max(10, int(os.environ.get("VAULT_REFRESH_SECONDS") or 10 * 60))
 GIT_TIMEOUT_SECONDS = 60
 DEFAULT_CLONE_DIR = "/tmp/build101-vault"
 # Index and team pages are not lessons: they are never injected
