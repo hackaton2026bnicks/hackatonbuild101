@@ -106,6 +106,12 @@ def _measure(session_id: str, transcript: str | None, environ, folder: Path) -> 
         log_error(folder, session_id, f"card: {error}")
         return
     work_card.append_line(str(folder / "cards.jsonl"), card)
+    # Something done the same way in 3 sessions or more becomes a recipe in the vault (Molle's detector)
+    try:
+        import recipe_detector
+    except ImportError:
+        return
+    recipe_detector.run(str(folder), user, environ, log=lambda m: log_error(folder, session_id, m))
 
 
 def main() -> None:

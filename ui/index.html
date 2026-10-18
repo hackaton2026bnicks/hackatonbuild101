@@ -363,6 +363,8 @@
     .answers { list-style: none; margin: 8px 0 0; padding: 0 0 0 14px; border-left: 2px solid var(--line); display: grid; gap: 8px; }
     .answers .msg { background: var(--soft); }
     .reply { margin-top: 8px; display: grid; gap: 6px; }
+    .sent-note { margin: 8px 0 0; padding: 6px 10px; border-radius: 8px; font-size: 0.84rem; background: color-mix(in srgb, var(--k-wait) 10%, var(--surface)); border: 1px solid color-mix(in srgb, var(--k-wait) 35%, transparent); }
+    .sent-note.delivered { background: color-mix(in srgb, var(--k-run) 10%, var(--surface)); border-color: color-mix(in srgb, var(--k-run) 35%, transparent); }
     .waiting { color: var(--accent); font-weight: 500; }
 
     .empty { padding: 22px 16px; color: var(--muted); }
@@ -1983,6 +1985,10 @@
       } else {
         foot.append(el("span", "waiting for an answer", "waiting"));
       }
+      if (answeredHere.has(m.id)) {
+        const mine = answers.find((a) => a.id === answeredHere.get(m.id));
+        li.append(sentNote(m, answeredHere.get(m.id), Boolean(mine && Number(mine.injected || 0))));
+      }
       const open = el("button", answers.length ? "Add an answer" : "Answer", "quiet");
       open.type = "button";
       open.addEventListener("click", () => {
@@ -1996,6 +2002,16 @@
       li.append(wrap);
     }
     return li;
+  }
+
+  // Answers sent from this page, by question, so the confirmation survives the thread's redraws
+  const answeredHere = new Map();
+
+  function sentNote(question, answerId, delivered) {
+    const note = el("p", null, `sent-note${delivered ? " delivered" : ""}`);
+    note.append(el("strong", delivered ? `✓ ${question.from_user}'s agent got your answer.` : `Answer #${answerId} sent to ${question.from_user}.`),
+      document.createTextNode(delivered ? "" : " It reaches their agent at its next step; this changes when it does."));
+    return note;
   }
 
   function replyForm(question) {
@@ -2015,7 +2031,10 @@
       event.preventDefault();
       send.disabled = true;
       try {
-        await api("/messages", { method: "POST", body: JSON.stringify({ kind: "answer", reply_to: question.id, body: area.value.trim(), repo }) });
+        const sent = await api("/messages", { method: "POST", body: JSON.stringify({ kind: "answer", reply_to: question.id, body: area.value.trim(), repo }) });
+        // The open box holds back redraws while it has text: replace it, so the thread shows the answer
+        answeredHere.set(question.id, sent.id);
+        form.replaceWith(sentNote(question, sent.id, false));
         refresh();
       } catch (err) {
         hint.textContent = `Not sent: ${err.message}`;
