@@ -40,10 +40,13 @@ PLAIN_FIELDS = (
     "agent_type",
     "source",
     "stop_hook_active",
+    "trigger",
 )
 SCRUBBED_FIELDS = ("prompt", "error")
 PATH_INPUTS = ("file_path", "notebook_path")
 SCRUBBED_INPUTS = ("command", "url")
+# Which skill or subagent the agent called: the name only, never its args or prompt
+NAME_INPUTS = ("skill", "subagent_type")
 SENSITIVE_ENV_NAME = re.compile(r"(?i)(key|token|secret|passw|credential|auth)")
 
 
@@ -76,6 +79,7 @@ def sanitize(raw: dict, environ: dict) -> dict:
     tool_input = raw.get("tool_input")
     if isinstance(tool_input, dict):
         kept = {f: tool_input[f][:TEXT_LIMIT] for f in PATH_INPUTS if isinstance(tool_input.get(f), str)}
+        kept |= {f: tool_input[f][:200] for f in NAME_INPUTS if isinstance(tool_input.get(f), str)}
         kept |= {
             f: clean(tool_input[f], secrets) for f in SCRUBBED_INPUTS if isinstance(tool_input.get(f), str)
         }

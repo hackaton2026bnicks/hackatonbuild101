@@ -79,6 +79,41 @@ def test_paths_are_relative_to_the_project_even_after_cd():
     assert forward.sanitize(raw, {})["cwd"] == "/home/ana/payments/server"
 
 
+def test_skill_and_subagent_names_are_sent_but_not_their_args_or_prompt():
+    skill = {
+        "hook_event_name": "PreToolUse",
+        "session_id": "s1",
+        "tool_name": "Skill",
+        "tool_input": {"skill": "capitalizar", "args": "PRIVATE_ARGS"},
+    }
+    agent = {
+        "hook_event_name": "PreToolUse",
+        "session_id": "s1",
+        "tool_name": "Agent",
+        "tool_input": {"subagent_type": "Explore", "description": "PRIVATE_DESC", "prompt": "PRIVATE_PROMPT"},
+    }
+    assert forward.sanitize(skill, {})["tool_input"] == {"skill": "capitalizar"}
+    assert forward.sanitize(agent, {})["tool_input"] == {"subagent_type": "Explore"}
+    assert "PRIVATE" not in str(forward.sanitize(skill, {})) + str(forward.sanitize(agent, {}))
+
+
+def test_compaction_is_sent_with_its_trigger_but_not_the_instructions():
+    raw = {
+        "hook_event_name": "PreCompact",
+        "session_id": "s1",
+        "cwd": "/home/ana/payments",
+        "trigger": "auto",
+        "custom_instructions": "PRIVATE_FOCUS",
+    }
+    sent = forward.sanitize(raw, {})
+    assert sent == {
+        "hook_event_name": "PreCompact",
+        "session_id": "s1",
+        "cwd": "/home/ana/payments",
+        "trigger": "auto",
+    }
+
+
 class FakeResponse:
     def __init__(self, body: bytes):
         self.body = body
