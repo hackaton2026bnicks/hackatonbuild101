@@ -3,10 +3,11 @@
 
 Lee ~/.claude/projects/*/*.jsonl (y los subagentes de cada sesion) y escribe una
 linea JSON por sesion con volumen, herramientas, fricciones, salidas y la secuencia
-canonica de acciones. No usa LLM y no manda nada a ningun lado.
+canonica de acciones. No usa LLM y no manda nada a ningun lado. Escribe en ~/.claude/session-insights.
 
-    python3 tools/session_facts.py --out ~/.claude/session-insights/facts.jsonl
+    python3 tools/session_facts.py                   # toda la historia -> facts_baseline.jsonl
     python3 tools/session_facts.py --since 2026-10-01 --share --out facts-share.jsonl
+    python3 tools/session_facts.py --session <id>    # solo esa sesion, agregada al final de facts.jsonl
 
 --share quita prompts, titulos y comandos (deja solo conteos y tokens canonicos),
 para poder juntar los hechos de todo el equipo sin mover texto de nadie.
@@ -24,6 +25,7 @@ import shlex
 from datetime import datetime
 
 PROJECTS = os.path.expanduser("~/.claude/projects")
+INSIGHTS_DIR = os.path.expanduser(os.environ.get("BUILD101_INSIGHTS_DIR", "~/.claude/session-insights"))
 IDLE_GAP_S = 300  # un hueco mayor a 5 min no cuenta como tiempo activo
 
 CORRECTION_RE = re.compile(
@@ -472,34 +474,52 @@ tool_ids: dict = {}
 seen_uuids: set = set()
 
 
+def dumps(f: dict) -> str:
+    return json.dumps(f, ensure_ascii=False, default=lambda o: dict(o) if isinstance(o, dict) else str(o))
+
+
+def transcript_of(session_id: str, projects: str = PROJECTS):
+    hits = glob.glob(os.path.join(projects, "*", f"{glob.escape(session_id)}.jsonl"))
+    return max(hits, key=os.path.getmtime) if hits else None
+
+
+def facts_for(path: str, user: str, share: bool = False):
+    """Hechos de un solo transcript, o None si la sesion no tuvo ni prompts ni acciones."""
+    tool_ids.clear()
+    f = session_facts(path, share=share)
+    if not f["start"] or (f["human_prompts"] == 0 and f["tool_calls"] == 0):
+        return None
+    f["user"] = user
+    return f
+
+
 def main():
     ap = argparse.ArgumentParser()
     ap.add_argument("--projects", default=PROJECTS)
-    ap.add_argument("--out", default=os.path.expanduser("~/.claude/session-insights/facts.jsonl"))
+    # facts.jsonl lo llena el hook SessionEnd y no se reescribe: Claude Code borra los transcripts viejos
+    ap.add_argument("--out", help="por defecto facts_baseline.jsonl, o facts.jsonl con --session")
     ap.add_argument("--since", help="YYYY-MM-DD, solo sesiones que empezaron desde esa fecha")
     ap.add_argument("--user", default=os.environ.get("USER", "me"))
     ap.add_argument("--share", action="store_true", help="sin texto: solo conteos y tokens canonicos")
+    ap.add_argument("--session", action="append", help="solo esa sesion, repetible; agrega al final de --out")
     a = ap.parse_args()
+    a.out = a.out or os.path.join(INSIGHTS_DIR, "facts.jsonl" if a.session else "facts_baseline.jsonl")
 
     os.makedirs(os.path.dirname(os.path.abspath(a.out)), exist_ok=True)
+    if a.session:
+        found = {s: transcript_of(s, a.projects) for s in a.session}
+        if not all(found.values()):
+            print("sin transcript: " + ", ".join(s for s, p in found.items() if not p))
+        paths = [p for p in found.values() if p]
+    else:
+        paths = sorted(glob.glob(os.path.join(a.projects, "*", "*.jsonl")), key=os.path.getmtime)
     n = 0
-    with open(a.out, "w") as out:
-        for path in sorted(glob.glob(os.path.join(a.projects, "*", "*.jsonl")), key=os.path.getmtime):
-            tool_ids.clear()
-            f = session_facts(path, share=a.share)
-            if not f["start"] or (a.since and f["start"][:10] < a.since):
+    with open(a.out, "a" if a.session else "w") as out:
+        for path in paths:
+            f = facts_for(path, a.user, share=a.share)
+            if not f or (a.since and f["start"][:10] < a.since):
                 continue
-            if f["human_prompts"] == 0 and f["tool_calls"] == 0:
-                continue
-            f["user"] = a.user
-            out.write(
-                json.dumps(
-                    f,
-                    ensure_ascii=False,
-                    default=lambda o: dict(o) if isinstance(o, collections.Counter) else str(o),
-                )
-                + "\n"
-            )
+            out.write(dumps(f) + "\n")
             n += 1
     print(f"{n} sesiones -> {a.out}")
 

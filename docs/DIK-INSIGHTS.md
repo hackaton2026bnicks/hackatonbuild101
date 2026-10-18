@@ -108,23 +108,72 @@ Para cada acción construida, sobre las sesiones de su patrón, 4 semanas antes 
 
 | Cuándo | Qué corre | Resultado |
 |---|---|---|
-| Una vez por persona | `session_facts.py` sobre toda la historia + fichas en lotes | Línea de base por persona y trabajo |
-| Al cerrar cada sesión | Hook `SessionEnd`: hechos de la sesión + ficha con `claude -p` y un modelo chico. Se suben a build101 (`session_facts`, `work_cards` de DIK-V2) | El dato queda listo sin que nadie corra nada |
-| Cada semana | `session_insights.py` sobre la semana contra las 4 anteriores | Tarjeta personal, 3 oportunidades, sesiones ejemplares, matriz de adopción. Revisión del viernes: hasta 3 acciones con dueño |
+| Una vez por persona | `session_facts.py` sobre toda la historia + `work_card.py --missing` | Línea de base por persona y trabajo |
+| Al cerrar cada sesión | Hook `SessionEnd` (`agent/claude-code/session_end.py`): hechos de esa sesión + ficha con `claude -p` y haiku, en segundo plano. Quedan en `~/.claude/session-insights/`; subirlos a build101 (`session_facts`, `work_cards` de DIK-V2) es el paso siguiente | El dato queda listo sin que nadie corra nada |
+| En cada hook | `forward.py` manda también el nombre de la skill, el tipo de subagente y las compactaciones (`PreCompact`, con `trigger` manual o auto) | La capa A desde el server, para todo el equipo |
+| Cada semana | `weekly_report.py`: la semana contra la mediana de las 4 anteriores | Los seis números con delta, 3 oportunidades, 3 sesiones ejemplares y patrones nuevos. Revisión del viernes: hasta 3 acciones con dueño |
 | Cada mes | Efecto de lo construido; revisión de vocabularios y pesos | Backlog que se cierra con evidencia |
 
-Privacidad, igual que DIK-V2: el transcript no sale de la máquina, `--share` deja solo conteos y tokens canónicos, el informe personal es privado y el equipo ve agregados por trabajo y las sesiones que su autor marcó como compartibles.
+Privacidad, igual que DIK-V2: el transcript no sale de la máquina, `--share` deja solo conteos y tokens canónicos, el informe personal es privado y el equipo ve agregados por trabajo y las sesiones que su autor marcó como compartibles. La ficha manda al modelo el mismo resumen que se usó en la línea de base (título, prompts recortados, herramientas y contadores); al server de build101 no va nada de esto.
+
+### Instalar la parte hacia adelante
+
+Una vez por persona, en la Mac:
+
+1. **Nombre y repo.** En `~/.zshrc`, el mismo nombre que en la línea de base y la ruta del repo:
+
+   ```bash
+   export BUILD101_INSIGHTS_USER=<persona>
+   export BUILD101_HOME=~/repos/hackatonbuild101
+   ```
+
+2. **Hook para todas las sesiones**, de cualquier repo: en `~/.claude/settings.json`, sumar esta entrada a `hooks.SessionEnd` (si ya hay otras, va al lado):
+
+   ```json
+   { "hooks": [{ "type": "command", "command": "python3 \"$BUILD101_HOME/agent/claude-code/session_end.py\"", "timeout": 10 }] }
+   ```
+
+   Para un solo proyecto alcanza con copiar `SessionEnd` y `PreCompact` de [settings.example.json](../agent/claude-code/settings.example.json). Si el hook queda instalado en los dos lados, mide una sola vez.
+
+3. **Probarlo** con una sesión que ya cerró (cualquier id de `~/.claude/projects/*/`):
+
+   ```bash
+   echo '{"hook_event_name": "SessionEnd", "session_id": "<id>"}' | python3 "$BUILD101_HOME/agent/claude-code/session_end.py"
+   tail -n1 ~/.claude/session-insights/facts.jsonl ~/.claude/session-insights/cards.jsonl
+   ```
+
+   Los hechos aparecen al instante y la ficha a los 5 a 10 s. Si algo falla queda en `errors.log`, al lado.
+
+4. **Línea de base**, si todavía no está: `python3 tools/session_facts.py --user <persona>` (escribe `facts_baseline.jsonl`) y después `python3 tools/work_card.py --missing` para las fichas que falten.
+
+5. **Resumen semanal** a mano o programado (viernes 18 h, antes de la revisión). Primero completa las fichas que no se hicieron, por ejemplo de sesiones cerradas con la Mac apagada:
+
+   ```bash
+   python3 tools/work_card.py --missing --since 2026-09-01 && python3 tools/weekly_report.py
+   ```
+
+   ```bash
+   # crontab -e
+   0 18 * * 5 cd ~/repos/hackatonbuild101 && /usr/bin/python3 tools/work_card.py --missing --since "$(date -v-35d +\%F)" >/dev/null && /usr/bin/python3 tools/weekly_report.py >/dev/null
+   ```
+
+   Queda en `~/.claude/session-insights/weekly/<semana>.md`. `--week anterior` da la última semana cerrada, y `--facts`/`--cards` con los archivos `--share` de todos da el del equipo.
+
+Qué cuesta: el cierre de la sesión suma de 0,2 a 0,4 s (arrancar Python y lanzar el proceso); la ficha tarda de 5 a 10 s en segundo plano y sale alrededor de USD 0,001 con haiku. Las corridas de la ficha no dejan transcript, no disparan hooks y no llegan a build101. Si una sesión se retoma y vuelve a cerrar, se agrega una línea nueva y los lectores se quedan con la última.
+
+Archivos en `~/.claude/session-insights/`: `facts.jsonl` y `cards.jsonl` (lo que agrega el hook), `facts_baseline.jsonl` y `cards_*.jsonl` (la línea de base), `errors.log`, `weekly/`. `weekly_report.py` y `work_card.py --missing` leen todos los `facts*` y `cards*`, así que conviven. Claude Code borra los transcripts a los 30 días (`cleanupPeriodDays`), así que `facts.jsonl` es el registro que queda: la corrida completa de `session_facts.py` escribe en otro archivo y nunca lo pisa.
 
 ## Cómo correrlo hoy
 
 ```bash
-python3 tools/session_facts.py --user <persona> --out ~/.claude/session-insights/facts.jsonl
+python3 tools/session_facts.py --user <persona>
+python3 tools/work_card.py --missing
 ```
 
-Las fichas: correr `tools/work_card_prompt.md` sobre lotes de unas 45 sesiones (con subagentes en paralelo o `claude -p`) y guardar `cards_*.jsonl` al lado.
+El primero escribe `~/.claude/session-insights/facts_baseline.jsonl` en unos 8 s. El segundo pide la ficha de cada sesión que no la tenga, de a una, con `tools/work_card_prompt.md` y haiku (para 275 sesiones conviene la corrida en lotes con subagentes, que es como se hizo la línea de base).
 
 ```bash
-python3 tools/session_insights.py --facts ~/.claude/session-insights/facts.jsonl --cards '~/.claude/session-insights/cards_*.jsonl' --out ~/.claude/session-insights/insights.json
+python3 tools/session_insights.py --facts ~/.claude/session-insights/facts*.jsonl --cards ~/.claude/session-insights/cards*.jsonl --out ~/.claude/session-insights/insights.json
 ```
 
 Para el equipo, cada persona corre el primer comando con `--share` y se juntan los archivos en `--facts 'equipo/*.jsonl'`.
@@ -135,5 +184,6 @@ Para el equipo, cada persona corre el primer comando con `--share` y se juntan l
 - Las correcciones por expresión regular son ruidosas ("no entiendo" no es una corrección). La ficha manda; el regex queda como señal barata.
 - L alto no siempre es bueno: las corridas programadas lo inflan y una sesión que da vueltas también. Por eso se compara dentro del trabajo y junto con F y R.
 - Los pesos de F (1, 3, 10) hacen que errores y compactaciones aporten parecido en la línea de base (42 % y 48 %). Hay que recalibrarlos con datos del equipo.
-- Los hooks de build101 todavía no mandan tokens, compactaciones ni el nombre de la skill o el subagente. Hay que sumarlos a `forward.py` (DIK-V2, capa A).
+- Los hooks de build101 ya mandan compactaciones y el nombre de la skill o el subagente, pero no tokens: los hooks no los traen. Hasta que se suban los `facts.jsonl`, la capa A completa está solo en cada máquina.
+- Una sesión bifurcada medida sola (hook o `--session`) cuenta también las líneas que copió de la original; la corrida completa las descuenta.
 - En el server hay por ahora una sola sesión real de Nico: la comparación entre personas está armada pero sin datos suficientes. Con 2 semanas de hooks de los dos ya alcanza.

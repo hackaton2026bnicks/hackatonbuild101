@@ -67,6 +67,31 @@ def test_failure_summary_uses_first_error_line_scrubbed():
     assert call.hosts == ["sandbox.bankx.com"]
 
 
+def test_skill_subagent_and_compaction_reach_the_payload():
+    skill = parse(
+        {
+            "hook_event_name": "PreToolUse",
+            "session_id": "s1",
+            "cwd": "/r",
+            "tool_name": "Skill",
+            "tool_input": {"skill": "capitalizar"},
+        }
+    )
+    agent = parse(
+        {
+            "hook_event_name": "PreToolUse",
+            "session_id": "s1",
+            "cwd": "/r",
+            "tool_name": "Agent",
+            "tool_input": {"subagent_type": "Explore"},
+        }
+    )
+    compact = parse({"hook_event_name": "PreCompact", "session_id": "s1", "cwd": "/r", "trigger": "auto"})
+    assert skill.payload["skill"] == "capitalizar" and skill.summary == "skill(capitalizar)"
+    assert agent.payload["subagent_type"] == "Explore" and agent.summary == "agent(Explore)"
+    assert compact.event_type == "compact" and compact.payload["trigger"] == "auto"
+
+
 def test_unknown_events_are_ignored():
     assert parse({"hook_event_name": "Notification", "session_id": "s1"}) is None
     assert parse({"hook_event_name": "PreToolUse"}) is None

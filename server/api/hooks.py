@@ -119,6 +119,10 @@ def parse(raw: dict, repo_header: str | None = None) -> HookCall | None:
             call.hosts = sorted(set(call.hosts) | set(hosts_in(url)))
         if call.hosts:
             payload["hosts"] = call.hosts
+        # Skill and subagent names count capital use per session (DIK v2, layer A)
+        for key in ("skill", "subagent_type"):
+            if isinstance(tool_input.get(key), str) and tool_input[key]:
+                payload[key] = tool_input[key][:128]
 
     if event_name == "PostToolUseFailure" and isinstance(raw.get("error"), str):
         payload["error"] = scrub(raw["error"], TEXT_LIMIT)
@@ -126,6 +130,8 @@ def parse(raw: dict, repo_header: str | None = None) -> HookCall | None:
         payload["prompt"] = scrub(raw["prompt"], TEXT_LIMIT)
     if event_name == "SessionStart" and raw.get("source"):
         payload["source"] = str(raw["source"])[:32]
+    if event_name == "PreCompact" and raw.get("trigger"):
+        payload["trigger"] = str(raw["trigger"])[:32]
     for key in ("agent_id", "agent_type"):
         if raw.get(key):
             payload[key] = str(raw[key])[:128]
@@ -151,6 +157,10 @@ def summarize(call: HookCall, payload: dict) -> str:
         return f"bash({payload.get('command', '')})"[:SUMMARY_LIMIT]
     if call.tool == "WebFetch" and call.hosts:
         return f"fetch({call.hosts[0]})"
+    if "skill" in payload:
+        return f"skill({payload['skill']})"
+    if "subagent_type" in payload:
+        return f"agent({payload['subagent_type']})"
     if call.tool:
         return call.tool.lower()
     if call.event_name == "SubagentStart":

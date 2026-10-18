@@ -69,6 +69,17 @@
         ]
       }
     ],
+    "PreCompact": [
+      {
+        "hooks": [
+          {
+            "type": "command",
+            "command": "python \"$BUILD101_HOME/agent/claude-code/forward.py\"",
+            "timeout": 10
+          }
+        ]
+      }
+    ],
     "Stop": [
       {
         "hooks": [
@@ -86,6 +97,11 @@
           {
             "type": "command",
             "command": "python \"$BUILD101_HOME/agent/claude-code/forward.py\"",
+            "timeout": 10
+          },
+          {
+            "type": "command",
+            "command": "python \"$BUILD101_HOME/agent/claude-code/session_end.py\"",
             "timeout": 10
           }
         ]
