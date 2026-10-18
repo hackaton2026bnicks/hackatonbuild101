@@ -51,6 +51,22 @@ notas a mano en Obsidian, subilas con git (o con el plugin Obsidian Git).
 `archivista chat` y `consultor chat` abren una charla de ida y vuelta, pero no
 sincronizan: hacé `git pull` antes y commit y push después.
 
+## Bandeja: lecciones que dejan las sesiones
+
+Al cerrar una sesión, `agent/claude-code/learn.py` saca de 0 a 3 lecciones y las deja
+en la cola del server (`POST /api/lessons`). Hermes no corre en todas las máquinas, así
+que alguien con Hermes y la bóveda deja corriendo la bandeja:
+
+```sh
+python3 agent/hermes/bandeja.py          # una vuelta cada 2 minutos (BANDEJA_INTERVAL)
+python3 agent/hermes/bandeja.py --once   # una vuelta y sale
+```
+
+Por cada lección pendiente le pasa al archivista el texto con su autor, sube lo que
+escribió (como `guardar`) y la marca en el server con la nota que quedó, o como
+descartada con el motivo. Si el archivista falla, la reintenta; a los 3 intentos la
+descarta. Usa `BUILD101_KEY` y `BUILD101_URL`, igual que los hooks.
+
 ## Cambiar el comportamiento
 
 Editá `archivista/SOUL.md` o `consultor/SOUL.md` y volvé a correr `setup.sh`.
