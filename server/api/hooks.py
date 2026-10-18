@@ -56,6 +56,7 @@ class HookCall:
     edits_file: bool = False
     hosts: list[str] = field(default_factory=list)
     stop_hook_active: bool = False
+    workspace: str = ""
     summary: str = ""
     payload: dict = field(default_factory=dict)
 
@@ -84,6 +85,12 @@ def repo_name(cwd: str, header: str | None) -> str:
     return _pure_path(cwd).name if cwd else "unknown"
 
 
+def checkout_key(path: str) -> str:
+    """One spelling per folder: forward slashes, no trailing slash, and Windows paths case-folded."""
+    path = path.replace("\\", "/").rstrip("/")[:500]
+    return path.lower() if re.match(r"^[A-Za-z]:", path) else path
+
+
 def hosts_in(text: str) -> list[str]:
     return sorted({host.lower() for host in URL_HOST.findall(text)})
 
@@ -105,6 +112,7 @@ def parse(raw: dict, repo_header: str | None = None) -> HookCall | None:
         tool=raw.get("tool_name"),
         stop_hook_active=str(raw.get("stop_hook_active")).lower() == "true",
     )
+    call.workspace = checkout_key(str(raw.get("workspace") or cwd))
     tool_input = raw.get("tool_input") if isinstance(raw.get("tool_input"), dict) else {}
     payload: dict = {"hook": event_name}
 

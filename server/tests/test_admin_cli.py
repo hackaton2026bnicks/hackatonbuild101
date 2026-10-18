@@ -1,3 +1,4 @@
+import psycopg
 import pytest
 from conftest import TEST_DATABASE_URL
 
@@ -42,3 +43,24 @@ def test_text_garbled_by_a_cp1252_stdin_is_repaired_only_on_apply(client, make_k
 def test_correct_text_is_never_touched():
     for text in ("Árbol y café", "plain ascii", "Café con una Ã suelta", "3Â piso"):
         assert unmangle(text) == text
+
+
+def test_session_tasks_are_recomputed_from_the_first_real_request(client, make_key):
+    from test_collab import ANA_REPO, hook
+
+    ana = make_key("ana")
+    with psycopg.connect(TEST_DATABASE_URL) as conn:
+        conn.execute(
+            "INSERT INTO sessions (team, session_id, user_name, agent, started_at, last_event_at, "
+            "last_event_type, last_summary, intent, event_count) VALUES ('default', 's-old', 'ana', "
+            "'claude-code', now(), now(), 'intent', '', 'No por ahora', 1)"
+        )
+    for prompt in ("<system-reminder>worktree</system-reminder>", "migrate the ledger to postgres", "dale"):
+        hook(client, ana, "UserPromptSubmit", "s-old", ANA_REPO, prompt=prompt)
+        with psycopg.connect(TEST_DATABASE_URL) as conn:
+            conn.execute("UPDATE sessions SET intent = 'No por ahora' WHERE session_id = 's-old'")
+
+    assert "Would repair (run again with --apply): 1 of 1" in run(["repair-tasks"], TEST_DATABASE_URL)
+    run(["repair-tasks", "--apply"], TEST_DATABASE_URL)
+    session = client.get("/sessions", headers=ana).json()["sessions"][0]
+    assert session["intent"] == "migrate the ledger to postgres"

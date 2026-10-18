@@ -106,3 +106,11 @@ def test_files_in_a_claude_code_worktree_are_the_repo_files():
     assert repo_relative(
         "/Users/beto/hackatonbuild101/.claude/settings.json", "/Users/beto/hackatonbuild101"
     ) == (".claude/settings.json")
+
+
+def test_a_folder_has_one_spelling_on_windows():
+    from api.hooks import checkout_key
+
+    assert checkout_key(r"c:\Users\ana\payments" + "\\") == checkout_key("C:/Users/ana/payments")
+    assert checkout_key("C:/Users/ana/payments") == "c:/users/ana/payments"
+    assert checkout_key("/home/Ana/payments/") == "/home/Ana/payments"

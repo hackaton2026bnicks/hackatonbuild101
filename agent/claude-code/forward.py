@@ -42,6 +42,7 @@ PLAIN_FIELDS = (
     "stop_hook_active",
     "trigger",
 )
+
 SCRUBBED_FIELDS = ("prompt", "error")
 PATH_INPUTS = ("file_path", "notebook_path")
 SCRUBBED_INPUTS = ("command", "url")
@@ -66,12 +67,28 @@ def clean(text: str, secrets: list[str]) -> str:
     return scrub(text, TEXT_LIMIT)
 
 
+def workspace(cwd: str, project: str) -> str:
+    """The checkout the session's shell works in: its Claude Code worktree, or else the project folder.
+
+    Two sessions in the same checkout share a branch: a `git checkout` in one changes the other's files.
+    """
+    path, root = cwd.replace("\\", "/"), project.replace("\\", "/").rstrip("/")
+    if not root:
+        return path
+    prefix = root + "/.claude/worktrees/"
+    if path.lower().startswith(prefix.lower()):
+        return prefix + path[len(prefix) :].split("/")[0]
+    return root
+
+
 def sanitize(raw: dict, environ: dict) -> dict:
     secrets = env_secrets(environ)
     out = {field: str(raw[field])[:TEXT_LIMIT] for field in PLAIN_FIELDS if raw.get(field) is not None}
     # The hook's cwd follows the agent's `cd`; the project root keeps the repo name and paths stable
     if environ.get("CLAUDE_PROJECT_DIR"):
         out["cwd"] = environ["CLAUDE_PROJECT_DIR"][:TEXT_LIMIT]
+    if isinstance(raw.get("cwd"), str):
+        out["workspace"] = workspace(raw["cwd"], environ.get("CLAUDE_PROJECT_DIR", ""))[:TEXT_LIMIT]
     for field in SCRUBBED_FIELDS:
         if isinstance(raw.get(field), str):
             out[field] = clean(raw[field], secrets)

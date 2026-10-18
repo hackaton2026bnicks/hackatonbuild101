@@ -83,6 +83,8 @@ def test_replies_and_harness_text_do_not_replace_the_task(client, make_key):
         "<system-reminder>You are operating in a git worktree.</system-reminder>",
         "Sí, creá una rama y un PR",
         "dale",
+        "No por ahora",
+        "now also add refunds to the same flow",
     ]
     events = [event("s-ana", "intent", prompt=p) for p in prompts]
     client.post("/events", json={"events": events}, headers=headers)

@@ -87,7 +87,7 @@ El canal llega, pero lo que lleva está sucio y no avisa cuando importa. Todo es
 | Qué falla | Qué se vio | Arreglo |
 | --- | --- | --- |
 | La "tarea" de cada sesión es basura | Una respuesta de Claude, un `<system-reminder>`, un `<agent-message>` de un subagente, "No por ahora" | La tarea sale del primer pedido real: se descartan los textos que inyecta el sistema y las respuestas cortas |
-| Acentos rotos desde Windows | "anÃ¡lisis" en estado y mensajes | Resuelto para lo nuevo en el PR #22. Falta reparar lo ya guardado (`fix/repair-mojibake`) |
+| Acentos rotos desde Windows | "anÃ¡lisis" en estado y mensajes | Resuelto: lo nuevo en el PR #22 y lo ya guardado con `./infra/keys.sh repair-text --apply` (19 valores, 18 de octubre) |
 | Dos sesiones de la misma persona se pisan | Una sesión de Nico le cambió la rama a otra en la misma carpeta, sin aviso | Detectar el choque por sesión y no por persona, y avisar cuando dos sesiones comparten carpeta |
 | Identidad confusa | Los commits de Molle salen como "nico" | Tomar el nombre de la key de build101, no de git |
 | La persona no se entera | Los mensajes solo le llegan al agente cuando corre un hook. Una sesión quieta no escucha | Sesión puente ([BRIDGE-SESSION.md](BRIDGE-SESSION.md)) |
@@ -95,9 +95,11 @@ El canal llega, pero lo que lleva está sucio y no avisa cuando importa. Todo es
 
 La sesión puente es una sesión de Claude Code con su propio CLAUDE.md: sabe que su trabajo es comunicarse con el equipo, corre `tools/bridge_listen.py`, y con cada mensaje nuevo decide si contesta, usa el MCP o le avisa a la persona. Después vuelve a escuchar.
 
-- [ ] Nico: tarea limpia y choques por sesión, con tests armados con los textos reales de la tabla
-- [ ] Nico: mergear la reparación de acentos y avisar que hay que hacer `git pull` y reiniciar Claude Code
-- [ ] Nico: comando `doctor` en `agent/claude-code/`
+- [x] Nico: tarea limpia (el primer pedido real; se descartan `<…>`, `&lt;…`, "No por ahora" y respuestas cortas) y `./infra/keys.sh repair-tasks` para recalcular las ya guardadas. Rama `fix/etapa1-signals`
+- [x] Nico: aviso cuando dos sesiones de la misma persona comparten carpeta, al iniciar y antes de un `git checkout`/`switch`/`stash`/`pull`. Rama `fix/etapa1-signals`
+- [x] Nico: reparar los acentos ya guardados (hecho en producción)
+- [ ] Nico: avisar al equipo que hagan `git pull`, reinicien Claude Code y corran `doctor`
+- [x] Nico: comando `doctor` en `agent/claude-code/`. Rama `fix/etapa1-signals`
 - [ ] Nico: sesión puente lista para instalar
 - [ ] Molle: probar todo en Mac y contar por `ask_team` lo que siga fallando
 

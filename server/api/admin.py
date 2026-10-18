@@ -5,6 +5,7 @@ Usage (on the server, through infra/admin.sh):
     python -m api.admin list-keys
     python -m api.admin revoke-key <id>
     python -m api.admin repair-text [--apply]
+    python -m api.admin repair-tasks [--apply]
 """
 
 import json
@@ -15,11 +16,12 @@ import sys
 import psycopg
 
 from api.auth import hash_key, new_key
+from api.models import SUMMARY_CHARS, states_a_task
 
 NAME = re.compile(r"^[A-Za-z0-9_.-]{1,64}$")
 USAGE = (
     "Usage: python -m api.admin create-key <user> [team] | list-keys | revoke-key <id>"
-    " | repair-text [--apply]"
+    " | repair-text [--apply] | repair-tasks [--apply]"
 )
 # UTF-8 read as cp1252: "análisis" stored as "anÃ¡lisis", "¿" as "Â¿", "’" as "â€™"
 MOJIBAKE = re.compile("[\u00c2\u00c3][\xa0-\xbf\u0152-\u2122]|\u00e2\u20ac")
@@ -50,6 +52,33 @@ def unmangle_json(value):
     if isinstance(value, dict):
         return {key: unmangle_json(item) for key, item in value.items()}
     return value
+
+
+def repair_tasks(conn, apply: bool) -> str:
+    """Recompute each session's task as its first real request, skipping harness text and replies."""
+    rows = conn.execute(
+        """
+        SELECT s.team, s.session_id, s.intent,
+               ARRAY(SELECT e.payload->>'prompt' FROM events e
+                     WHERE e.team = s.team AND e.session_id = s.session_id AND e.type = 'intent'
+                     ORDER BY e.id) AS prompts
+        FROM sessions s
+        """
+    ).fetchall()
+    changed = []
+    for team, session_id, intent, prompts in rows:
+        task = next((p.strip()[:SUMMARY_CHARS] for p in prompts if p and states_a_task(p.strip())), None)
+        if task != intent:
+            changed.append((team, session_id, intent, task))
+    if apply:
+        for team, session_id, _, task in changed:
+            conn.execute(
+                "UPDATE sessions SET intent = %s WHERE team = %s AND session_id = %s",
+                (task, team, session_id),
+            )
+    lines = [f"{(old or '-')[:50]!r} -> {(new or '-')[:50]!r}" for _, _, old, new in changed[:8]]
+    verb = "Repaired" if apply else "Would repair (run again with --apply)"
+    return "\n".join(lines + [f"{verb}: {len(changed)} of {len(rows)} session tasks."])
 
 
 def repair_text(conn, apply: bool) -> str:
@@ -110,6 +139,8 @@ def run(args: list[str], database_url: str) -> str:
                 "UPDATE api_keys SET revoked_at = now() WHERE id = %s AND revoked_at IS NULL", (int(rest[0]),)
             ).rowcount
             return f"Revoked key {rest[0]}." if updated else f"No active key with id {rest[0]}."
+        if command == "repair-tasks" and rest in ([], ["--apply"]):
+            return repair_tasks(conn, apply=rest == ["--apply"])
         if command == "repair-text" and rest in ([], ["--apply"]):
             return repair_text(conn, apply=rest == ["--apply"])
     raise SystemExit(USAGE)
