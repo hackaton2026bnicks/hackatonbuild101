@@ -97,7 +97,7 @@ TOOLS = [
     {
         "name": "team_status",
         "description": "Who is working in this repo right now, on what task, which files they are editing, "
-        "and which team questions are still unanswered.",
+        "which team questions are still unanswered, and answers to questions you asked.",
         "inputSchema": {"type": "object", "properties": {}},
     },
 ]
@@ -207,7 +207,7 @@ def call_tool(name: str, args: dict, environ: dict) -> str:
         )
         return (
             f"Asked as question #{message.get('id')}. Keep working; if a teammate's agent answers, "
-            "it reaches you in a later turn marked [build101 · answer ...]."
+            "it reaches you in a later turn marked [build101 · answer ...], and team_status lists it too."
         )
     if name == "answer_team":
         question_id = args.get("question_id")
@@ -244,6 +244,13 @@ def format_status(team: dict) -> str:
     if questions:
         lines.append("Unanswered team questions (answer with answer_team if you know):")
         lines += [f"- #{q['id']} from {q['from_user']}: {q['body']}" for q in questions]
+    answers = team.get("answers_for_you") or []
+    if answers:
+        lines.append("Answers to your questions:")
+        lines += [
+            f"- #{a['reply_to']} ({a['question'][:80]}) {a['from_user']} answered: {a['body']}"
+            for a in answers
+        ]
     return "\n".join(lines)
 
 

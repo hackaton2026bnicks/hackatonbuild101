@@ -274,8 +274,16 @@ class Database:
                           reply_to, to_session
                 """,
                 (
-                    team, kind, topics, body, from_user, from_session,
-                    priority, ttl_minutes, reply_to, to_session,
+                    team,
+                    kind,
+                    topics,
+                    body,
+                    from_user,
+                    from_session,
+                    priority,
+                    ttl_minutes,
+                    reply_to,
+                    to_session,
                 ),
             )
             return await cur.fetchone()
@@ -421,6 +429,21 @@ class Database:
                 LIMIT %s
                 """,
                 (team, topics, limit),
+            )
+            return await cur.fetchall()
+
+    async def answers_to(self, team: str, user: str, limit: int) -> list[dict]:
+        """Live answers to questions this user asked, so they can be read even when hooks do not reach."""
+        async with self.pool.connection() as conn:
+            cur = await conn.execute(
+                """
+                SELECT a.id, a.reply_to, a.body, a.from_user, a.created_at, q.body AS question
+                FROM messages a JOIN messages q ON q.id = a.reply_to
+                WHERE a.team = %s AND a.kind = 'answer' AND q.from_user = %s AND a.expires_at > now()
+                ORDER BY a.created_at DESC
+                LIMIT %s
+                """,
+                (team, user, limit),
             )
             return await cur.fetchall()
 
