@@ -2,6 +2,19 @@
 
 Estado al 18 de octubre de 2026. Junta lo que pensó Beto y lo que vimos fallar hoy.
 
+## Dónde estamos
+
+Actualizado el 18 de octubre a la mañana, después del PR #35.
+
+| Etapa | Estado |
+| --- | --- |
+| 1. Ahora | Lista. Falta avisarle al equipo que haga `git pull`, reinicie y corra `doctor` |
+| 2. Conectar la base | Lista. En prod: la bóveda tiene 14 notas, 10 lecciones pasaron por la bandeja y las notas ya les llegan a las sesiones |
+| 3. Medir y sugerir | Casi. El tablero y el hook de recetas están en prod. Falta: resultados de Beto y Nico (hoy solo está Molle) y ver una sugerencia en una sesión real |
+| 4. Compartir y mostrar | Sin empezar: animaciones, sesión puente y hooks dentro del plugin |
+
+Dónde se ve: el tablero es la app del equipo, https://54-89-124-87.sslip.io/ (entrás con tu `BUILD101_KEY`). "Does the team learn?" y "What to build once for everyone" están debajo de "How the team works with Claude".
+
 Molle se queda con todo lo que guarda y reparte conocimiento: la bóveda con Hermes, los patrones de uso y las skills del equipo. Nico se queda con lo que conecta eso a cada sesión, la comunicación entre agentes y el tablero.
 
 ## Quién se encarga de qué
@@ -44,12 +57,12 @@ La bóveda es la fuente. El server no guarda conocimiento propio: solo indexa la
 
 Lo que el índice lee de cada nota: `tipo`, `tags`, `autor`, `actualizado`, `aplica_cuando` (en `gotcha` y `receta`, es el disparador) y los enlaces `[[Título]]`. El título es el nombre del archivo.
 
-- [ ] Molle: darle a Nico y al server acceso de lectura a `build101-vault`
-- [ ] Molle: una entrada para que el cierre de sesión le mande lecciones al archivista, como un `guardar` remoto
+- [x] Molle: darle a Nico y al server acceso de lectura a `build101-vault` (deploy key de solo lectura; la org bloqueaba los fine-grained tokens)
+- [x] Molle: una entrada para que el cierre de sesión le mande lecciones al archivista: `agent/hermes/bandeja.py` lee la cola del server (PR #31)
 - [x] Nico: que el server lea la bóveda, la actualice cada 10 minutos e indexe `conocimiento/` (`server/api/vault.py`, con la deploy key de solo lectura que vive en el EC2)
 - [x] Nico: que los hooks de inicio, de pedido, de archivo y de error lean de ese índice, más la tool `team_knowledge` del MCP
 - [x] Nico: que `learn.py` mande las lecciones a la cola del server (`POST /lessons`), de donde las levanta `agent/hermes/bandeja.py` de Molle; los `share_discovery` también entran
-- [ ] Nico y Molle: probar el ciclo completo
+- [x] Nico y Molle: probar el ciclo completo. En prod: lección → `/lessons` → bandeja → archivista → push a la bóveda → el server la indexa → el hook se la pasa a la sesión que toca ese archivo
 
 ## 2. Insights y patrones de uso
 
@@ -73,9 +86,9 @@ Qué hace la skill `/insights <nombre>`:
 
 **Hacia adelante:** la misma medición corre sola al cerrar cada sesión (corrida 2). Calcula horas, llamados a skills y tools, tokens y los seis números de [DIK-INSIGHTS.md](DIK-INSIGHTS.md). Cuando un patrón aparece en 3 sesiones o más, se guarda como `receta` en la bóveda, para que el objetivo 5 lo pueda sugerir.
 
-- [ ] Molle: la skill, dentro del plugin del equipo (objetivo 5)
+- [x] Molle: la skill, dentro del plugin del equipo (objetivo 5). PR #32
 - [ ] Nico: probarla en Windows
-- [ ] Molle y Beto: correrla y subir sus resultados, para tener 3 personas en el tablero
+- [ ] Molle, Beto y Nico: correrla y subir sus resultados, para tener 3 personas en el tablero. Molle ya subió; faltan Beto y Nico
 - [ ] Molle: definir con Beto qué patrón se guarda como nota y cuál solo se muestra en el tablero
 
 ## 3. Comunicación entre agentes y sesiones
@@ -100,7 +113,7 @@ La sesión puente es una sesión de Claude Code con su propio CLAUDE.md: sabe qu
 - [x] Nico: reparar los acentos ya guardados (hecho en producción)
 - [ ] Nico: avisar al equipo que hagan `git pull`, reinicien Claude Code y corran `doctor`
 - [x] Nico: comando `doctor` en `agent/claude-code/`. Rama `fix/etapa1-signals`
-- [ ] Nico: sesión puente lista para instalar
+- [ ] Nico: sesión puente lista para instalar. `tools/bridge_listen.py` ya anda en Windows (PR #34); falta el CLAUDE.md propio y el comando para abrirla
 - [ ] Molle: probar todo en Mac y contar por `ask_team` lo que siga fallando
 
 ## 4. Tablero
@@ -127,8 +140,8 @@ De los 10 insights del catálogo de [DIK-INSIGHTS.md](DIK-INSIGHTS.md), van a la
 
 **Para la demo:** los bots ya cambian de estado según la acción. Falta una animación y un ícono por estado, y un efecto cuando un agente le contesta a otro.
 
-- [ ] Nico: endpoint que reciba el `resultado.json` de `/insights` por persona y período
-- [ ] Nico: secciones "¿El equipo aprende?" y "Oportunidades compartidas"
+- [x] Nico: endpoint que reciba el `resultado.json` de `/insights` por persona y período: `POST /api/insights` (PR #34)
+- [x] Nico: secciones "¿El equipo aprende?" y "Oportunidades compartidas" (PR #34)
 - [ ] Nico: animaciones de los bots
 - [ ] Molle: revisar con Beto que esos 4 insights son los que miraría un viernes
 
@@ -147,7 +160,7 @@ Lo que uno construye le tiene que quedar a todo el equipo, y la sesión tiene qu
 3. Al próximo pedido parecido, el hook del pedido la encuentra en el índice y la sugiere.
 4. Si la receta es de otra persona, llega igual.
 
-- [ ] Molle: repo de plugin del equipo con `/insights` y los hooks de build101
-- [ ] Molle: sumar a la `receta` un campo `skill:` cuando ya existe una
-- [ ] Nico: hook en `UserPromptSubmit` que sugiera como máximo una receta por sesión
-- [ ] Nico y Molle: probarlo con una tarea real que alguno repita
+- [ ] Molle: repo de plugin del equipo con `/insights` y los hooks de build101. `/insights` ya está; faltan los hooks
+- [x] Molle: sumar a la `receta` un campo `skill:` cuando ya existe una (lo pide el SOUL.md del archivista)
+- [x] Nico: hook en `UserPromptSubmit` que sugiera como máximo una receta por sesión (PR #35)
+- [ ] Nico y Molle: probarlo con una tarea real que alguno repita. Ya hay una receta con skill: "quiero analizar mis sesiones" tendría que sugerir `/insights`
