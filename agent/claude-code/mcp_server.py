@@ -9,6 +9,7 @@ Environment:  BUILD101_KEY (required), BUILD101_URL (optional), BUILD101_REPO (o
 
 from __future__ import annotations
 
+import io
 import json
 import os
 import re
@@ -408,7 +409,8 @@ def handle(message: dict, environ: dict) -> dict | None:
 
 
 def main() -> None:
-    for line in sys.stdin:
+    # Claude Code writes UTF-8; on Windows sys.stdin decodes cp1252 and turns á into Ã¡
+    for line in io.TextIOWrapper(sys.stdin.buffer, encoding="utf-8"):
         if not line.strip():
             continue
         try:

@@ -171,3 +171,12 @@ def test_timeouts_and_other_errors_are_not_retried():
     assert forward.post("req", urlopen=urlopen, sleep=lambda s: None) is None
     assert len(calls) == 2
     assert urllib.error  # imported for the failure types above
+
+
+def test_hook_payload_is_read_as_utf8_even_when_the_console_is_cp1252():
+    import io
+    import json
+
+    payload = json.dumps({"prompt": "corran el análisis, año"}, ensure_ascii=False).encode("utf-8")
+    stdin = io.TextIOWrapper(io.BytesIO(payload), encoding="cp1252")
+    assert forward.read_stdin_json(stdin) == {"prompt": "corran el análisis, año"}
