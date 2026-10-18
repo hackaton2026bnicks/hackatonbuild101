@@ -39,6 +39,8 @@ services:
       VAULT_GIT: ${VAULT_GIT:-git@github.com:hackaton2026bnicks/build101-vault.git}
       VAULT_SSH_KEY: /run/secrets/vault_key
       VAULT_REFRESH_SECONDS: ${VAULT_REFRESH_SECONDS:-60}
+      # Off for the hackathon demo; 10 measures whether the notes help
+      HOLDOUT_PERCENT: ${HOLDOUT_PERCENT:-0}
     volumes:
       # Created on the host once (ssh-keygen -f /root/.ssh/build101_vault); it never leaves the server
       - /root/.ssh/build101_vault:/run/secrets/vault_key:ro
